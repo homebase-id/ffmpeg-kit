@@ -1,6 +1,7 @@
 name: ios build scripts
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - development
@@ -32,7 +33,7 @@ jobs:
     runs-on: macos-14
     strategy:
       matrix:
-        xcode: [ '15.4', '16.0' ]
+        xcode: ['15.4', '16.0']
     defaults:
       run:
         shell: bash
@@ -55,7 +56,7 @@ jobs:
     runs-on: macos-13
     strategy:
       matrix:
-        xcode: [ '14.3.1', '15.2' ]
+        xcode: ['14.3.1', '15.2']
     defaults:
       run:
         shell: bash
@@ -78,7 +79,7 @@ jobs:
     runs-on: macos-12
     strategy:
       matrix:
-        xcode: [ '13.4.1', '14.2' ]
+        xcode: ['13.4.1', '14.2']
     defaults:
       run:
         shell: bash

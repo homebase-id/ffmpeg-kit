@@ -1,6 +1,7 @@
 name: android build scripts
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - development
@@ -30,7 +31,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r22b-linux-x86_64', 'r23b-linux', 'r24-linux', 'r25b-linux' ]
+        ndk-version: ['r22b-linux-x86_64', 'r23b-linux', 'r24-linux', 'r25b-linux']
     defaults:
       run:
         shell: bash
@@ -61,7 +62,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r22b-linux-x86_64', 'r23b-linux' ]
+        ndk-version: ['r22b-linux-x86_64', 'r23b-linux']
     defaults:
       run:
         shell: bash
@@ -92,7 +93,7 @@ jobs:
     runs-on: macos-12
     strategy:
       matrix:
-        ndk-version: [ 'r22b-darwin-x86_64', 'r23b-darwin', 'r24-darwin', 'r25b-darwin' ]
+        ndk-version: ['r22b-darwin-x86_64', 'r23b-darwin', 'r24-darwin', 'r25b-darwin']
     defaults:
       run:
         shell: bash
@@ -121,7 +122,7 @@ jobs:
     runs-on: macos-12
     strategy:
       matrix:
-        ndk-version: [ 'r22b-darwin-x86_64', 'r23b-darwin' ]
+        ndk-version: ['r22b-darwin-x86_64', 'r23b-darwin']
     defaults:
       run:
         shell: bash
@@ -150,7 +151,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r22b-linux-x86_64' ]
+        ndk-version: ['r22b-linux-x86_64']
     defaults:
       run:
         shell: bash
