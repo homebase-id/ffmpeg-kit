@@ -53,7 +53,7 @@ jobs:
       # Push the version increment back into the repo
       - name: Restore npmrc updates
         run: |
-          git restore .npmrc
+         cd react-native && git restore .npmrc
 
       - name: Create PR for NPM version bump
         id: version-bump
