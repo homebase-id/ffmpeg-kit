@@ -40,13 +40,13 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          npm version prerelease --w react-native
+          cd react-native && npm version prerelease
 
-      - run: npm ci
+      - run: cd react-native npm ci
       
       - name: Publish RN Lib
         if: steps.filter.outputs.rnLib == 'true'
-        run: npm publish --w ./react-native
+        run: cd react-native npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
