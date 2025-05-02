@@ -1,0 +1,65 @@
+name: 'Release libraries to Github Packages'
+on:
+  # release:
+  #   types: [published]
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'react-native/**'
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rnLib:
+              - 'react-native/**'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://npm.pkg.github.com'
+          # Defaults to the user or organization that owns the workflow file
+          scope: '@octocat'
+
+      - name: Authenticate to Github packages
+        run: |
+          echo "@homebase-id:registry=https://npm.pkg.github.com" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+
+      # Set git User & Bump the version: https://docs.npmjs.com/cli/v8/commands/npm-version
+      - name: Bump rn-lib version
+        if: steps.filter.outputs.rnLib == 'true'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          npm version prerelease --w ./react-native
+
+      - run: npm ci
+      
+      - name: Publish RN Lib
+        if: steps.filter.outputs.rnLib == 'true'
+        run: npm publish --w ./react-native
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Push the version increment back into the repo
+      - name: Restore npmrc updates
+        run: |
+          git restore .npmrc
+
+      - name: Create PR for NPM version bump
+        id: version-bump
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch-suffix: short-commit-hash
+          commit-message: 'Bump version for react-native lib'
+          title: 'Bump version for react-native lib
+          body: ''
