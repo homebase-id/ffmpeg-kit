@@ -46,7 +46,7 @@ jobs:
       
       - name: Publish RN Lib
         if: steps.filter.outputs.rnLib == 'true'
-        run: cd react-native npm publish
+        run: cd react-native && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
