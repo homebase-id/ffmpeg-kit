@@ -23,7 +23,7 @@
   },
   "homepage": "https://github.com/homebase-id/ffmpeg-kit",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/youfoundation"
+    "registry": "https://npm.pkg.github.com/homebase-id"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^17.7.0",
