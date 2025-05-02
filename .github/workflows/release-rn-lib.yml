@@ -61,5 +61,5 @@ jobs:
         with:
           branch-suffix: short-commit-hash
           commit-message: 'Bump version for react-native lib'
-          title: 'Bump version for react-native lib
+          title: 'Bump version for react-native lib'
           body: ''
