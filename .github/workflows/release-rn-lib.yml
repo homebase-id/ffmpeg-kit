@@ -43,21 +43,10 @@ jobs:
           npm version prerelease --w ./react-native
 
       - run: npm ci
-
-
-
+      
       - name: Publish RN Lib
         if: steps.filter.outputs.rnLib == 'true'
-        run: npm publish --w ./packages/libs/js-lib
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build UI Lib
-        run: npm run build --w ./packages/libs/ui-lib
-
-      - name: Publish UI Lib
-        if: steps.filter.outputs.uilib == 'true'
-        run: npm publish --w ./packages/libs/ui-lib
+        run: npm publish --w ./react-native
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -71,6 +60,6 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           branch-suffix: short-commit-hash
-          commit-message: 'Bump version for js-lib and/or ui-lib'
-          title: 'Bump version for js-lib and/or ui-lib'
+          commit-message: 'Bump version for react-native lib'
+          title: 'Bump version for react-native lib
           body: ''
