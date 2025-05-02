@@ -1,6 +1,6 @@
 {
   "name": "@homebase-id/ffmpeg-kit-react-native",
-  "version": "6.0.3-0",
+  "version": "6.0.2",
   "description": "FFmpeg Kit for React Native",
   "main": "src/index",
   "types": "src/index.d.ts",
@@ -11,13 +11,7 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "release": "release-it"
   },
-  "keywords": [
-    "react-native",
-    "android",
-    "ffmpeg",
-    "ffmpeg-kit",
-    "ios"
-  ],
+  "keywords": ["react-native", "android", "ffmpeg", "ffmpeg-kit", "ios"],
   "repository": {
     "type": "git",
     "url": "https://github.com/homebase-id/ffmpeg-kit"
@@ -57,9 +51,7 @@
     "preset": "react-native"
   },
   "commitlint": {
-    "extends": [
-      "@commitlint/config-conventional"
-    ]
+    "extends": ["@commitlint/config-conventional"]
   },
   "release-it": {
     "git": {
@@ -80,10 +72,7 @@
   },
   "eslintConfig": {
     "root": true,
-    "extends": [
-      "@react-native-community",
-      "prettier"
-    ],
+    "extends": ["@react-native-community", "prettier"],
     "rules": {
       "prettier/prettier": [
         "error",
@@ -97,9 +86,7 @@
       ]
     }
   },
-  "eslintIgnore": [
-    "node_modules/"
-  ],
+  "eslintIgnore": ["node_modules/"],
   "prettier": {
     "quoteProps": "consistent",
     "singleQuote": true,

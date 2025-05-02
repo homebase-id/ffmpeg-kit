@@ -34,13 +34,13 @@ jobs:
           echo "@homebase-id:registry=https://npm.pkg.github.com" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
-      # Set git User & Bump the version: https://docs.npmjs.com/cli/v8/commands/npm-version
-      - name: Bump rn-lib version
-        if: steps.filter.outputs.rnLib == 'true'
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          cd react-native && npm version prerelease
+      # # Set git User & Bump the version: https://docs.npmjs.com/cli/v8/commands/npm-version
+      # - name: Bump rn-lib version
+      #   if: steps.filter.outputs.rnLib == 'true'
+      #   run: |
+      #     git config user.name github-actions
+      #     git config user.email github-actions@github.com
+      #     cd react-native && npm version prerelease
 
       - run: cd react-native && npm ci
       
@@ -50,16 +50,16 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Push the version increment back into the repo
-      - name: Restore npmrc updates
-        run: |
-         cd react-native && git restore .npmrc
+      # # Push the version increment back into the repo
+      # - name: Restore npmrc updates
+      #   run: |
+      #    cd react-native && git restore .npmrc
 
-      - name: Create PR for NPM version bump
-        id: version-bump
-        uses: peter-evans/create-pull-request@v6
-        with:
-          branch-suffix: short-commit-hash
-          commit-message: 'Bump version for react-native lib'
-          title: 'Bump version for react-native lib'
-          body: ''
+      # - name: Create PR for NPM version bump
+      #   id: version-bump
+      #   uses: peter-evans/create-pull-request@v6
+      #   with:
+      #     branch-suffix: short-commit-hash
+      #     commit-message: 'Bump version for react-native lib'
+      #     title: 'Bump version for react-native lib'
+      #     body: ''
