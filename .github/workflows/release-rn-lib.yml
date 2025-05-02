@@ -42,7 +42,7 @@ jobs:
           git config user.email github-actions@github.com
           cd react-native && npm version prerelease
 
-      - run: cd react-native npm ci
+      - run: cd react-native && npm ci
       
       - name: Publish RN Lib
         if: steps.filter.outputs.rnLib == 'true'
