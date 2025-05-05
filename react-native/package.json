@@ -1,5 +1,5 @@
 {
-  "name": "homebase-id-ffmpeg-kit-react-native",
+  "name": "@homebase-id/ffmpeg-kit-react-native",
   "version": "6.0.2",
   "description": "FFmpeg Kit for React Native",
   "main": "src/index",
