@@ -1,5 +1,5 @@
 {
-  "name": "@homebase-id/ffmpeg-kit-react-native",
+  "name": "homebase-id-ffmpeg-kit-react-native",
   "version": "6.0.2",
   "description": "FFmpeg Kit for React Native",
   "main": "src/index",
@@ -11,10 +11,16 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
     "release": "release-it"
   },
-  "keywords": ["react-native", "android", "ffmpeg", "ffmpeg-kit", "ios"],
+  "keywords": [
+    "react-native",
+    "android",
+    "ffmpeg",
+    "ffmpeg-kit",
+    "ios"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/homebase-id/ffmpeg-kit"
+    "url": "git+https://github.com/homebase-id/ffmpeg-kit.git"
   },
   "author": "ARTHENICA <open-source@arthenica.com> (https://www.arthenica.com)",
   "license": "LGPL-3.0",
@@ -51,7 +57,9 @@
     "preset": "react-native"
   },
   "commitlint": {
-    "extends": ["@commitlint/config-conventional"]
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   },
   "release-it": {
     "git": {
@@ -72,7 +80,10 @@
   },
   "eslintConfig": {
     "root": true,
-    "extends": ["@react-native-community", "prettier"],
+    "extends": [
+      "@react-native-community",
+      "prettier"
+    ],
     "rules": {
       "prettier/prettier": [
         "error",
@@ -86,7 +97,9 @@
       ]
     }
   },
-  "eslintIgnore": ["node_modules/"],
+  "eslintIgnore": [
+    "node_modules/"
+  ],
   "prettier": {
     "quoteProps": "consistent",
     "singleQuote": true,
