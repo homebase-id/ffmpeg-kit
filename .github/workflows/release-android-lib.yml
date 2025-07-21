@@ -30,17 +30,20 @@ jobs:
       - name: Set up Android SDK/NDK
         uses: android-actions/setup-android@v3 # Installs SDK/NDK if needed
 
-      - name: Build with android.sh
+      # Removed build step; download prebuilt AAR instead
+      - name: Download Prebuilt AAR from GitHub Release
         if: steps.filter.outputs.android == 'true'
         run: |
-          export ANDROID_SDK_ROOT=$ANDROID_HOME
-          export ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-bundle
-          ./android.sh  # Run your build script to generate AARs
+          curl -L -H "Accept: application/octet-stream" \
+               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               -o android/ffmpeg-kit-full.aar \
+               https://github.com/homebase-id/ffmpeg-kit/releases/download/v6.0.2/bundle-android-aar-ffmpeg-kit-full-6.0.2.aar
 
       - name: Publish to GitHub Packages
         if: steps.filter.outputs.android == 'true'
         run: |
           cd android
-          ./gradlew publish  # Assumes build.gradle has publishing config
+          # Assuming build.gradle is updated to publish the prebuilt AAR (see below)
+          ./gradlew publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Your PAT secret

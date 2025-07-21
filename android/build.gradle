@@ -27,9 +27,7 @@ publishing {
             artifactId = 'ffmpeg-kit-full'  // Package name, e.g., full, min, etc.
             version = '6.0.2'  // From your release tag
 
-            afterEvaluate {
-                from components.release
-            }
+            artifact('ffmpeg-kit-full.aar')  // Points to the downloaded prebuilt AAR
         }
     }
     repositories {
