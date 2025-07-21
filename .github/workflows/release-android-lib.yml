@@ -37,7 +37,7 @@ jobs:
           curl -L -H "Accept: application/octet-stream" \
                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
                -o android/ffmpeg-kit-full.aar \
-               https://github.com/homebase-id/ffmpeg-kit/releases/download/v6.0.2/bundle-android-aar-ffmpeg-kit-full-6.0.2.aar
+               https://github.com/homebase-id/ffmpeg-kit/releases/download/v6.0.2/ffmpeg-kit.aar
 
       - name: Publish to GitHub Packages
         if: steps.filter.outputs.android == 'true'
