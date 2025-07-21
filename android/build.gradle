@@ -18,3 +18,27 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+// Add publishing configuration
+publishing {
+    publications {
+        release(MavenPublication) {
+            groupId = 'com.homebase-id'  // Your org
+            artifactId = 'ffmpeg-kit-full'  // Package name, e.g., full, min, etc.
+            version = '6.0.2'  // From your release tag
+
+            afterEvaluate {
+                from components.release
+            }
+        }
+    }
+    repositories {
+        maven {
+            url = "https://maven.pkg.github.com/homebase-id/ffmpeg-kit"
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
