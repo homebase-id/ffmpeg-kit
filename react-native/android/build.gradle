@@ -125,5 +125,5 @@ repositories {
 
 dependencies {
   api 'com.facebook.react:react-native:+'
-  implementation 'com.homebase.id:ffmpeg-kit-' + safePackageName(safeExtGet('ffmpegKitPackage', 'https')) + ':' + safePackageVersion(safeExtGet('ffmpegKitPackage', 'https'))  // Updated group to match screenshot
+  implementation 'com.homebase-id:ffmpeg-kit-full:6.0.2' 
 }
