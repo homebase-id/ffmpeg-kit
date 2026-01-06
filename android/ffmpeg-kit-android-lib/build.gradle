@@ -4,14 +4,14 @@ android {
     if (project.android.hasProperty("namespace")) {
         namespace 'com.arthenica.ffmpegkit'
     }
-    compileSdk 33
+    compileSdk COMPILE_SDK_VERSION as int
     ndkVersion "22.1.7171670"
 
     defaultConfig {
-        minSdk 24
-        targetSdk 33
-        versionCode 240600
-        versionName "6.0"
+        minSdk MIN_SDK_VERSION as int
+        targetSdk TARGET_SDK_VERSION as int
+        versionCode VERSION_NUMBER as int
+        versionName VERSION_NAME as String
         project.archivesBaseName = "ffmpeg-kit"
         consumerProguardFiles "consumer-rules.pro"
     }
@@ -30,7 +30,7 @@ android {
 
     sourceSets {
         main {
-            jniLibs.srcDirs = ["../libs"]
+            jniLibs.srcDirs = ["./src/main/libs"]
         }
     }
 
