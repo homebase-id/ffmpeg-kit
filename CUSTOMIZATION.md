@@ -286,6 +286,54 @@ work for that pattern to succeed end-to-end.
    build, run the existing chat-kmp test cases (thumbnail, HLS, AES-128
    playlist). If green, promote.
 
+# Build pipeline TODOs (deferred — address after n7.1.3 is green end-to-end)
+
+These are concerns about the artifacts ffmpeg-kit's build scripts emit,
+not about the source-level customizations above. They cause friction for
+chat-kmp's iOS build pipeline. Deliberately deferred until we've proved
+the n7.1.3 upgrade works (AAR built, chat-kmp Android/JVM tests green).
+
+## B1 — iOS xcframework is code-signed; chat-kmp has to strip signatures
+
+- [ ] Investigate whether `./ios.sh` is invoking a `codesign` step we can
+      suppress, or whether the signature is inherited from the Xcode
+      toolchain doing implicit signing on framework embedding.
+- [ ] If suppressing isn't possible, add a post-build step in `./ios.sh`
+      that runs `codesign --remove-signature` across each architecture
+      slice in the produced xcframework so chat-kmp can drop its
+      signature-strip workaround.
+
+**Why:** chat-kmp currently runs a custom script to strip signatures from
+the embedded `ffmpegkit.framework` before its own app signing pass.
+That's a workaround for ffmpeg-kit shipping signed binaries — the right
+fix lives here.
+
+## B2 — iOS xcframework ships fat (multi-arch) binaries; chat-kmp wants thin
+
+- [ ] Audit how `./ios.sh` packages slices. The xcframework wrapper is
+      correct, but each embedded `.framework`'s Mach-O may still be a fat
+      binary (e.g., arm64 + x86_64 simulator combined). Apple deprecated
+      that model; modern xcframeworks expect one thin slice per
+      platform/architecture.
+- [ ] Switch the build to emit per-arch thin binaries (separate sim and
+      device slices), letting the xcframework wrapper do the
+      arch-routing instead of fat Mach-O.
+
+**Why:** chat-kmp's iOS link step trips over the fat binary structure,
+forcing another workaround. Thin slices are what Xcode 14+ expects.
+
+**How to apply:** both B1 and B2 are pure build-script changes — no
+source customization, no FFmpeg API work. Likely a few flag tweaks in
+`./ios.sh` and the apple Makefile.am invocations.
+
+## Verification (after fix)
+- B1: produced `ffmpegkit.framework` Mach-O passes `codesign -dv` as
+      unsigned.
+- B2: `lipo -info <slice>/ffmpegkit.framework/ffmpegkit` reports a
+      single architecture per slice.
+- chat-kmp can drop its signature-strip script and its fat-binary
+  workaround.
+
 # How to update this document
 
 When applying any C-item above, check its checkbox. If a new customization
@@ -293,3 +341,7 @@ is added (something not in C1–C8), add a new section in numbered order and
 explain why. If a customization is *removed* because its consumer no
 longer needs it, mark it `~~struck~~` rather than deleting — future
 upgrades will want to know it was once there.
+
+Build pipeline TODOs (B-items) use the same conventions — checkbox per
+sub-task, struck-through if dropped, and they go in their own section to
+keep them separate from the source-level customizations.
