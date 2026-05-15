@@ -17,6 +17,7 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pthread.h>

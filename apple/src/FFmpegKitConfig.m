@@ -18,6 +18,7 @@
  */
 
 #import <stdatomic.h>
+#import <string.h>
 #import <sys/types.h>
 #import <sys/stat.h>
 #import "libavutil/ffversion.h"

@@ -381,6 +381,36 @@ the build scripts going forward.
       `--arch=` expects.
 - **Commit:** `253fe8b`
 
+### U6 — Wrapper files missing `<string.h>` / `<cstring>` includes
+
+- [x] Fixed
+- **Symptom:** Android build past FFmpeg compile and through to wrapper
+      build, then fails with `implicit-function-declaration` errors on
+      `strlen` / `strcpy` (under `-Werror`):
+      ```
+      ffprobekit.c: error: implicitly declaring library function 'strlen'
+        with type 'unsigned int (const char *)' [-Werror,-Wimplicit-function-declaration]
+      ```
+- **Root cause:** wrapper sources call `strlen` / `strcpy` (e.g.
+      `argv[0] = av_malloc(strlen(LIB_NAME) + 1); strcpy(argv[0], ...)`)
+      but don't `#include <string.h>`. In older toolchains the symbol
+      arrived transitively via libavformat or similar; NDK r25+ clang
+      tightens implicit-decl enforcement and the build script passes
+      `-Werror`. One file (`ffprobekit.c`) failed; `ffmpegkit.c` only
+      happened to compile because it transitively pulled in string.h
+      through `libavutil/file.h` or `<stdatomic.h>`.
+- **Fix:** add the missing include at the top of every wrapper source
+      that uses `<string.h>` functions. Done defensively for all
+      platforms even though only one platform's CI surfaced it:
+  - `android/.../cpp/ffprobekit.c` and `ffmpegkit.c`: `#include <string.h>`
+  - `apple/src/FFmpegKitConfig.m`: `#import <string.h>`
+  - `linux/src/FFmpegKitConfig.cpp`: `#include <cstring>` (C++)
+- **Future-proofing:** if a new wrapper file is added that uses
+      `strlen`/`strcpy`/`memcpy`/etc., always include the header
+      explicitly. Don't rely on transitive includes through libav*
+      headers — those vary across FFmpeg versions.
+- **Commit:** _set on commit_
+
 ### U5 — `AV_LOG_STDERR` removed; deleted dead wrapper code (not the define)
 
 - [x] Fixed
