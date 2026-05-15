@@ -286,6 +286,104 @@ work for that pattern to succeed end-to-end.
    build, run the existing chat-kmp test cases (thumbnail, HLS, AES-128
    playlist). If green, promote.
 
+# FFmpeg version-bump fixes (by upgrade event)
+
+When bumping FFmpeg's major version, expect the **build scripts** to need
+small patches — FFmpeg removes headers, changes configure-script
+behaviour, and tightens clang argument validation between majors. These
+are not Homebase customizations (they don't get re-applied to a fresh
+ffmpeg-kit checkout); they're one-time fixes that go into the build
+scripts and stay there. Future bumps will hit different ones in the
+same categories.
+
+**Pre-upgrade checklist** (run before dispatching CI on a fresh bump):
+
+1. Cross-check the headers `scripts/<platform>/ffmpeg.sh` copies from
+   `src/ffmpeg/` against the new FFmpeg's source tree. Drop any header
+   that no longer exists.
+2. Verify `--cpu=<X>` arguments still translate correctly to clang
+   `-march=<X>` — clang has tightened its CPU-name validation; spot
+   check by running `clang -march=$TARGET_CPU -c /dev/null -o /dev/null`
+   for each ABI you target.
+3. Check whether the arthenica mirror has the tags you want for every
+   external lib (the mirrors stopped getting tag pushes after the
+   project was archived in 2025). When in doubt: bump only ffmpeg,
+   leave external libs at last-known-good pins, then bump individual
+   libs one at a time with verified tag existence.
+4. If FFmpeg `fftools/` has gained new sources, they need adding to
+   each platform's build file (`Android.mk` / `Makefile.am`) — see C7
+   above for the prefix convention.
+
+## n6.0 → n7.1.3 fixes (2026-05)
+
+These were the build-script patches needed to compile FFmpeg n7.1.3 on
+top of the n6.0-era ffmpeg-kit scripts. Each is checked-in and lives in
+the build scripts going forward.
+
+### U1 — Don't speculatively bump external library pins
+
+- [x] Lesson learned, applied
+- **Symptom:** `INFO: Downloading library <name> failed. Can not get
+      library from https://github.com/arthenica/<lib>` during the
+      `Downloading sources` phase.
+- **Root cause:** arthenica/* mirrors stopped getting tag pushes after
+      the upstream project was archived in mid-2025. A speculative
+      "bump every lib to latest stable" produces SOURCE_IDs that don't
+      exist on any mirror.
+- **Fix:** bump only `ffmpeg)` in `scripts/source.sh`; leave every
+      other library at the n6.0-era pin. Bump individual libs later,
+      one at a time, after verifying the tag exists on the mirror (or
+      switching `SOURCE_REPO_URL` to canonical upstream).
+- **Commit:** `64a7610`
+
+### U2 — `libavutil/x86/emms.h` was removed in FFmpeg 7
+
+- [x] Fixed
+- **Symptom:** `cp: cannot stat 'src/ffmpeg/libavutil/x86/emms.h': No
+      such file or directory` at the very end of FFmpeg's build phase,
+      after `make install` ran cleanly. Triggers `ffmpeg: failed` and
+      no AAR/framework gets emitted.
+- **Root cause:** ffmpeg-kit's `scripts/<platform>/ffmpeg.sh` has a
+      hardcoded list of internal headers it copies from `src/ffmpeg/`
+      into the output `include/` dir. `libavutil/x86/emms.h` (legacy
+      MMX EMMS state management) was removed as a public header in
+      FFmpeg 7. The `cp` returns non-zero and the `[ $? -eq 0 ]` check
+      a few lines later trips.
+- **Fix:** drop the `overwrite_file ... emms.h` line from all three
+      platform scripts.
+- **Commit:** `31d31c4`
+
+### U3 — `TARGET_CPU` for x86-64 must be hyphenated
+
+- [x] Fixed
+- **Symptom:** `error: unknown target CPU 'x86_64'` from clang during
+      FFmpeg's `./configure` "C compiler works?" check, specifically
+      on the x86-64 architecture. The valid-CPU list clang prints
+      includes `x86-64` (with hyphen).
+- **Root cause:** FFmpeg n7's configure passes `--cpu=$TARGET_CPU`
+      straight through to clang as `-march=$TARGET_CPU` without the
+      n6.0-era internal remap from `x86_64` → `x86-64`. Modern clang
+      (NDK r25+, recent Xcode toolchains) is strict about the hyphen.
+- **Fix:** set `TARGET_CPU="x86-64"` (hyphenated) for the x86-64 ABI
+      in all three platform scripts. `TARGET_ARCH` stays `x86_64`
+      (underscored) — that's FFmpeg's internal arch name and what
+      `--arch=` expects.
+- **Commit:** `253fe8b`
+
+### U4 — fftools/ added 5 new sources
+
+- [x] Fixed during scaffolding (C7)
+- **Symptom:** would manifest as `undefined reference to
+      sch_run/...`  link errors if the new sources weren't added.
+- **Root cause:** n7 split fftools into more files: added
+      `ffmpeg_dec.c`, `ffmpeg_enc.c`, `ffmpeg_sched.c/.h`,
+      `ffmpeg_utils.h`. The platform build files (`Android.mk`,
+      `Makefile.am`) didn't know about them.
+- **Fix:** add the 5 new sources/headers to `MY_SRC_FILES`
+      (Android.mk) and `libffmpegkit_la_SOURCES` / `include_HEADERS`
+      (apple/linux `Makefile.am`).
+- **Commit:** `46a0908` (scaffolding)
+
 # Build pipeline TODOs (deferred — address after n7.1.3 is green end-to-end)
 
 These are concerns about the artifacts ffmpeg-kit's build scripts emit,
