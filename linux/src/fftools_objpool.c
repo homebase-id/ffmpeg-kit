@@ -1,6 +1,5 @@
 /*
  * This file is part of FFmpeg.
- * Copyright (c) 2023 ARTHENICA LTD
  *
  * FFmpeg is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,19 +14,6 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
- */
-
-/*
- * This file is the modified version of objpool.c file living in ffmpeg source code under the fftools folder. We
- * manually update it each time we depend on a new ffmpeg version. Below you can see the list of changes applied
- * by us to develop ffmpeg-kit library.
- *
- * ffmpeg-kit changes by ARTHENICA LTD
- *
- * 07.2023
- * --------------------------------------------------------
- * - FFmpeg 6.0 changes migrated
- * - fftools header names updated
  */
 
 #include <stdint.h>

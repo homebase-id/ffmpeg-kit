@@ -1,6 +1,5 @@
 /*
  * This file is part of FFmpeg.
- * Copyright (c) 2023 ARTHENICA LTD
  *
  * FFmpeg is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,19 +14,6 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
- */
-
-/*
- * This file is the modified version of thread_queue.c file living in ffmpeg source code under the fftools folder. We
- * manually update it each time we depend on a new ffmpeg version. Below you can see the list of changes applied
- * by us to develop ffmpeg-kit library.
- *
- * ffmpeg-kit changes by ARTHENICA LTD
- *
- * 07.2023
- * --------------------------------------------------------
- * - FFmpeg 6.0 changes migrated
- * - fftools header names updated
  */
 
 #include <stdint.h>
@@ -178,7 +164,12 @@ static int receive_locked(ThreadQueue *tq, int *stream_idx,
     FifoElem elem;
     unsigned int nb_finished = 0;
 
-    if (av_fifo_read(tq->fifo, &elem, 1) >= 0) {
+    while (av_fifo_read(tq->fifo, &elem, 1) >= 0) {
+        if (tq->finished[elem.stream_idx] & FINISHED_RECV) {
+            objpool_release(tq->obj_pool, &elem.obj);
+            continue;
+        }
+
         tq->obj_move(data, elem.obj);
         objpool_release(tq->obj_pool, &elem.obj);
         *stream_idx = elem.stream_idx;
@@ -186,7 +177,7 @@ static int receive_locked(ThreadQueue *tq, int *stream_idx,
     }
 
     for (unsigned int i = 0; i < tq->nb_streams; i++) {
-        if (!(tq->finished[i] & FINISHED_SEND))
+        if (!tq->finished[i])
             continue;
 
         /* return EOF to the consumer at most once for each stream */
@@ -211,7 +202,14 @@ int tq_receive(ThreadQueue *tq, int *stream_idx, void *data)
     pthread_mutex_lock(&tq->lock);
 
     while (1) {
+        size_t can_read = av_fifo_can_read(tq->fifo);
+
         ret = receive_locked(tq, stream_idx, data);
+
+        // signal other threads if the fifo state changed
+        if (can_read != av_fifo_can_read(tq->fifo))
+            pthread_cond_broadcast(&tq->cond);
+
         if (ret == AVERROR(EAGAIN)) {
             pthread_cond_wait(&tq->cond, &tq->lock);
             continue;
@@ -219,9 +217,6 @@ int tq_receive(ThreadQueue *tq, int *stream_idx, void *data)
 
         break;
     }
-
-    if (ret == 0)
-        pthread_cond_broadcast(&tq->cond);
 
     pthread_mutex_unlock(&tq->lock);
 
