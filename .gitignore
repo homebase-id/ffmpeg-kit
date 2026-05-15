@@ -1,5 +1,6 @@
 /.tmp/
 /*.log
+/logs_*.zip
 /prebuilt/
 .DS_Store
 .idea
