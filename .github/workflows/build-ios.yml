@@ -27,6 +27,14 @@ jobs:
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *
+      - name: Upload xcframework as workflow artifact
+        uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: ffmpegkit-bundled-xcframework
+          path: prebuilt/bundle-apple-xcframework-ios/ffmpegkit-bundled.xcframework.zip
+          if-no-files-found: warn
+          retention-days: 30
       - name: Upload Release Asset (.integrity)
         id: upload-release-asset-integrity
         uses: ncipollo/release-action@v1
