@@ -291,8 +291,6 @@ static void callbackNotify() {
 
 static const char *avutil_log_get_level_str(int level) {
     switch (level) {
-    case AV_LOG_STDERR:
-        return "stderr";
     case AV_LOG_QUIET:
         return "quiet";
     case AV_LOG_DEBUG:

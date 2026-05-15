@@ -229,37 +229,16 @@ patches.
 **Status: ALREADY DONE.** Verify by grepping `git diff stock-n7.1.3..HEAD --
 '*/fftools_*.c' | grep '#include "ffmpeg.h"'` — must return empty.
 
-## C9 — `AV_LOG_STDERR` custom log-level sentinel
+## ~~C9 — `AV_LOG_STDERR` custom log-level sentinel~~
 
-- [x] Defined `#define AV_LOG_STDERR -16` in `fftools_ffmpeg.h` (all
-      three platform trees).
+~~Define a private log-level constant for fork-tagged messages.~~
 
-**Status: REQUIRED for chat-kmp.** The wrapper layer
-(`android/.../cpp/ffmpegkit.c`, `apple/src/FFmpegKitConfig.m`,
-`linux/src/FFmpegKitConfig.cpp`) references `AV_LOG_STDERR` in a
-`switch` case (mapping to the string `"stderr"`) and in the
-quiet-filter logic (`level != AV_LOG_STDERR` bypasses
-`AV_LOG_QUIET`).
-
-**What's going on.** This constant is **not** a standard FFmpeg
-symbol — it has never existed in `libavutil/log.h`. The ffmpeg-kit
-fork historically defined it in `fftools_cmdutils.h` as a sentinel
-value `-16` (below `AV_LOG_QUIET = -8`, so it can't collide with any
-real log level) so that fork-modified fftools code could emit messages
-the wrapper would always surface. When we re-snapshotted fftools from
-stock n7.1.3, the define was lost. The wrapper compile then breaks
-with `use of undeclared identifier 'AV_LOG_STDERR'`.
-
-**How to apply.** Add the define at the bottom of `fftools_ffmpeg.h`
-(after the other ffmpeg-kit customization symbols) and propagate to
-all three platform trees. That header is already included by both the
-vendored fftools and the wrapper layer.
-
-**Reference.** Search for `AV_LOG_STDERR` in `pre-7.1.3-baseline`:
-the old `fftools_cmdutils.h:82` had the define. Multiple n6.0 fftools
-.c files also used `av_log(NULL, AV_LOG_STDERR, ...)` to tag
-fork-specific output — if we ever re-introduce those custom log
-calls in the fftools port, the same define covers them.
+**Removed (see U5).** We deliberately deleted the dead wrapper code
+that referenced this constant instead of carrying the define forever.
+Kept the struck-through entry as institutional memory: the constant
+existed in n6.0 era. If a future consumer needs always-surface log
+tagging, re-introduce the define plus the wrapper switch case plus
+emit sites in vendored fftools.
 
 ## C8 — License + changelog header comment
 
@@ -401,6 +380,46 @@ the build scripts going forward.
       (underscored) — that's FFmpeg's internal arch name and what
       `--arch=` expects.
 - **Commit:** `253fe8b`
+
+### U5 — `AV_LOG_STDERR` removed; deleted dead wrapper code (not the define)
+
+- [x] Fixed
+- **Symptom:** wrapper compile fails with `use of undeclared identifier
+      'AV_LOG_STDERR'` in `ffmpegkit.c`, `FFmpegKitConfig.m`,
+      `FFmpegKitConfig.cpp` after fftools is replaced with stock n7.
+- **Root cause:** `AV_LOG_STDERR` was never a standard FFmpeg
+      constant. The n6.0 ffmpeg-kit fork defined it as `-16` in
+      `fftools_cmdutils.h` and emitted at that level from
+      fork-modified fftools code to tag "always show" messages. When
+      we re-snapshot fftools from stock n7, both the define *and* the
+      emit sites disappear. The wrapper's `switch` case and
+      quiet-filter clause then reference an undefined identifier.
+- **Considered fix:** add `#define AV_LOG_STDERR -16` back as a
+      customization (former C9). Works, but leaves dead code in the
+      wrapper (no caller in our build ever emits at that level) and
+      adds a per-upgrade replay burden because the define lives in
+      `fftools_ffmpeg.h` (which is wiped each upgrade).
+- **Chosen fix:** delete the dead wrapper references instead.
+  - `ffmpegkit.c`: drop the `case AV_LOG_STDERR:` arm of
+    `avutil_log_get_level_str()`; simplify the quiet-filter to
+    `if (level > activeLogLevel) return;` (the AV_LOG_QUIET special
+    case was only there to honour the STDERR exception).
+  - `FFmpegKitConfig.m` / `FFmpegKitConfig.cpp`: drop the same
+    `case AV_LOG_STDERR:` arm.
+  - Touched files live OUTSIDE `fftools_*` and so survive future
+    replay-script runs.
+- **Caveat:** Java-side dead code still references
+      `Level.AV_LOG_STDERR(-16)` in `Level.java` /
+      `FFmpegKitConfig.java`. Left alone for now — it's not blocking
+      and removing `Level.AV_LOG_STDERR` would change the public
+      Java enum (binary-incompatible for any downstream Java consumer
+      that imports the constant). Revisit when planning a major
+      version bump.
+- **Why this is the "smooth future upgrades" pick:** the deletion is
+      in wrapper files that aren't touched by `replay.sh`; future
+      upgrades carry the deletion forward automatically. Zero
+      recurring cost.
+- **Commit:** _set on commit_
 
 ### U4 — fftools/ added 5 new sources
 
