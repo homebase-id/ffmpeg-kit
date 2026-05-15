@@ -82,6 +82,18 @@
 #include "fftools_ffmpeg_sched.h"
 #include "fftools_ffmpeg_utils.h"
 
+/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n7.1.3.
+ * See CUSTOMIZATION.md at the repo root for the full framework.
+ *
+ *   C1 — main() renamed ffmpeg_execute()
+ *   C2 — body wrapped in setjmp(ex_buf__); failed runs longjmp here instead
+ *        of calling exit()
+ *   C4 — cancel_operation() no-op stub (chat-kmp does not use cancel API)
+ *   C5 — set_report_callback() no-op stub (chat-kmp does not consume stats)
+ *   C6 — setvbuf(stderr) and fflush(stderr) calls removed
+ */
+#include "ffmpegkit_exception.h"
+
 const char program_name[] = "ffmpeg";
 const int program_birth_year = 2000;
 
@@ -676,7 +688,8 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         } else
             av_log(NULL, AV_LOG_INFO, "%s    %c", buf.str, end);
 
-        fflush(stderr);
+        /* C6: fflush(stderr) removed — caused log ordering issues on
+         * the iOS bridge when running embedded. */
     }
     av_bprint_finalize(&buf, NULL);
 
@@ -944,16 +957,46 @@ static int64_t getmaxrss(void)
 #endif
 }
 
-int main(int argc, char **argv)
+/* C4 — cancel_operation: no-op stub. chat-kmp doesn't call FFmpegKit.cancel();
+ * cancellation is handled at the coroutine layer instead. Symbol exists so
+ * the wrapper layer (ffmpegkit.c, FFmpegKit.m) links. To implement real
+ * cancellation, set a session-id-keyed atomic flag here and poll it inside
+ * fftools_ffmpeg_sched.c::sch_wait. */
+void cancel_operation(long id) {
+    (void)id;
+}
+
+/* C5 — set_report_callback: no-op stub. chat-kmp doesn't consume the
+ * Statistics API. The wrapper calls this at session start/end and the
+ * symbol must resolve. forward_report() is intentionally NOT wired into
+ * print_report(); add that if a future consumer needs progress events.
+ * The ffmpeg_report_callback typedef lives in fftools_ffmpeg.h. */
+static __thread ffmpeg_report_callback report_callback = NULL;
+
+void set_report_callback(ffmpeg_report_callback fn) {
+    report_callback = fn;
+}
+
+/* C1 — entry point: main() renamed to ffmpeg_execute() so the wrapper layer
+ * can invoke ffmpeg as a callable function instead of a process. */
+int ffmpeg_execute(int argc, char **argv)
 {
     Scheduler *sch = NULL;
 
     int ret;
     BenchmarkTimeStamps ti;
 
+    /* C2 — setjmp catches any exit_program() call deeper in the stack and
+     * unwinds back here with the exit code, rather than tearing down the
+     * host process. */
+    if (setjmp(ex_buf__) != 0) {
+        return longjmp_value;
+    }
+
     init_dynload();
 
-    setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
+    /* C6 — setvbuf(stderr) removed; it was a Win32-only requirement and
+     * stomped on the host process's stderr handling on Android/iOS. */
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);

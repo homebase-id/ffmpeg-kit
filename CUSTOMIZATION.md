@@ -1,0 +1,295 @@
+# Homebase ffmpeg-kit customizations
+
+This document is the canonical reference for the source-level customizations
+this fork applies on top of stock FFmpeg fftools. It is intentionally
+evergreen — when the FFmpeg version is bumped, re-apply each item below to
+the new fftools snapshot. Update the checkboxes as work progresses.
+
+## Lineage
+
+| Tag | Meaning |
+| --- | --- |
+| `pre-7.1.3-baseline` | Last working build on FFmpeg n6.0. Safety net. |
+| `stock-n7.1.3` | Stock FFmpeg n7.1.3 `fftools/` re-snapshotted into all three platform trees, with the `fftools_` prefix rename and `#include` rewrites applied. **No Homebase customizations yet.** |
+| `upgrade/ffmpeg-7.1.3` | Active branch where customizations are being layered on top of `stock-n7.1.3`. |
+
+To see *exactly* what makes our build different from stock FFmpeg, run:
+
+```
+git diff stock-n7.1.3..HEAD -- '*/fftools_*.c' '*/fftools_*.h'
+```
+
+That diff is the customization set. Everything in it should be documented here.
+
+## Reference patches from the prior n6.0 vendored set
+
+When upgrading FFmpeg, the previous customization set is the best reference:
+
+```
+c:/temp/Git/_upgrade_work/patches/<file>.patch
+```
+
+These are unified diffs between stock FFmpeg n6.0 fftools and the n6.0-era
+vendored copies in this repo. They were extracted from the
+`pre-7.1.3-baseline` tag during the n6.0 → n7.1.3 upgrade and are the
+authoritative record of what customizations existed historically. ~5,800
+lines total, but the load-bearing parts are far smaller (see below).
+
+## Why this fork customizes fftools at all
+
+Stock `ffmpeg` and `ffprobe` are standalone executables — they have a
+`main()`, they call `exit()` on failure, they live in their own process.
+ffmpeg-kit needs them as **library entry points** callable from JNI / Obj-C
+inside a host process (an Android app, an iOS app, the chat-kmp KMP binary).
+The customizations exist to make that work safely:
+
+- `main()` becomes a regular function so it can be called from a wrapper.
+- `exit()` becomes a `longjmp` so a failure doesn't kill the host process.
+- Module globals become thread-local so multiple invocations don't race.
+- Optional hooks (stats forwarding, cancellation, log redirection) expose
+  FFmpeg's internal state to the wrapper layer.
+
+# Customization set
+
+Each item below is independently portable. Required items must be re-applied
+on every FFmpeg version bump or the build will not link. Optional items are
+called out per-consumer (chat-kmp's needs are documented inline).
+
+## C1 — Entry-point rename: `main` → `ffmpeg_execute` / `ffprobe_execute`
+
+- [x] Applied to `fftools_ffmpeg.c` (all three platform trees)
+- [x] Applied to `fftools_ffprobe.c` (all three platform trees)
+
+**Status: REQUIRED for chat-kmp.** The wrapper layer
+(`android/.../cpp/ffmpegkit.c:823`, `android/.../cpp/ffprobekit.c:88`) calls
+these symbols directly:
+
+```c
+int ffmpeg_execute(int argc, char **argv);
+int ffprobe_execute(int argc, char **argv);
+```
+
+**What to do.** In `fftools_ffmpeg.c`, locate `int main(int argc, char **argv)`
+and rename to `int ffmpeg_execute(int argc, char **argv)`. Same for
+`fftools_ffprobe.c` → `ffprobe_execute`. Strip the Windows-only console
+wrappers and `prepare_app_arguments` calls if present — they assume an
+actual process entry.
+
+**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` line ~95 onward shows
+the n6.0 rename. The shape is the same in n7.1.3, but in n7.1.3 `main()` may
+delegate more into the scheduler; the rename still applies to the outer
+function.
+
+**How to verify.** After re-applying, the symbol `ffmpeg_execute` and
+`ffprobe_execute` must resolve at link time when building
+`libffmpegkit.{so,dylib}`. Run `nm libffmpegkit.so | grep -E
+'ffmpeg_execute|ffprobe_execute'` — both must appear with a `T` (defined).
+
+## C2 — `exit()` → `setjmp`/`longjmp` exit handling
+
+- [x] `exit_program()` defined in `ffmpegkit_exception.{m,c,cpp}` (not in
+      `fftools_cmdutils.c` — stock n7.1.3 has no such function to override,
+      so we add it alongside `ex_buf__` and `longjmp_value` instead)
+- [x] `ffmpegkit_exception.h` extended with `extern __thread int longjmp_value`
+      and `void exit_program(int)` prototype, wrapped in `extern "C"` guards
+- [x] Matching `setjmp` site in `fftools_ffmpeg.c::ffmpeg_execute`
+- [x] Matching `setjmp` site in `fftools_ffprobe.c::ffprobe_execute`
+- [x] `ffmpegkit_exception.h` `#include`d at the top of `fftools_ffmpeg.c`
+      and `fftools_ffprobe.c` (not needed in `fftools_cmdutils.c` since
+      `exit_program` now lives in the exception module)
+- [x] All 5 `exit(1)` calls in `fftools_ffprobe.c` replaced with
+      `exit_program(1)` so they unwind via longjmp
+
+**Status: REQUIRED for chat-kmp.** Without this, any failed FFmpeg
+invocation calls `exit()` and tears down the host KMP / Android / iOS
+process. chat-kmp depends on `Session.getReturnCode().isSuccess` reporting
+the failure cleanly back to Kotlin.
+
+**What to do.** Replace `void exit_program(int ret)` in `fftools_cmdutils.c`
+to set a thread-local `longjmp_value` and `longjmp` to the buffer declared
+in `ffmpegkit_exception.h`. In `ffmpeg_execute` / `ffprobe_execute`, wrap
+the body in `if (setjmp(...) == 0) { /* normal path */ } else { return
+longjmp_value; }`.
+
+**Reference.** `_upgrade_work/patches/cmdutils.c.patch` (~250 lines) — most
+of the meaningful patch lives here, plus the setjmp site in
+`_upgrade_work/patches/ffmpeg.c.patch`.
+
+**How to verify.** Issue a deliberately broken command (e.g. `ffmpeg -i
+/nonexistent /tmp/out.mp4`). The wrapper must return a non-zero
+`ReturnCode`, and the host process must keep running.
+
+## C3 — Thread-local module globals
+
+- [ ] `vstats_file`, `received_sigterm`, `received_nb_signals` in
+      `fftools_ffmpeg.c` marked `__thread` (or `_Thread_local`)
+- [ ] Audit n7.1.3-new files (`fftools_ffmpeg_sched.c`, `fftools_ffmpeg_dec.c`,
+      `fftools_ffmpeg_enc.c`) for additional module globals introduced
+      by the scheduler refactor and mark them `__thread` if shared
+
+**Status: REQUIRED for safety; OPTIONAL for chat-kmp's current usage.**
+chat-kmp serializes FFmpeg calls behind a coroutine and does not invoke
+concurrently from multiple threads today, so a non-thread-safe build would
+likely work in practice. But the customization is cheap and protects against
+future regressions if any caller decides to parallelize transcodes.
+
+**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` around the
+`static FILE *vstats_file` declaration.
+
+## C4 — `cancel_operation(long id)`
+
+- [x] **Stubbed.** No-op `void cancel_operation(long id)` added in
+      `fftools_ffmpeg.c` (all three trees). Symbol resolves; cancellation
+      does not interrupt an in-progress run. chat-kmp handles cancellation
+      at the coroutine layer instead.
+
+**Status: SYMBOL REQUIRED; FUNCTIONALITY OPTIONAL for chat-kmp.**
+
+**Minimum viable.** Add the following to `fftools_ffmpeg.c` near the top:
+
+```c
+void cancel_operation(long id) {
+    (void)id;
+    // Homebase chat-kmp does not use ffmpeg-kit's cancel API; cancellation
+    // is handled at the coroutine layer instead. Symbol exists to satisfy
+    // the wrapper link, but does not interrupt an in-progress invocation.
+}
+```
+
+**If we ever need real cancellation.** Set a thread-local atomic flag keyed
+by session id; in the scheduler main loop in `fftools_ffmpeg_sched.c`, poll
+this flag and short-circuit. The n7.1.3 scheduler is new ground — the n6.0
+implementation that lived in `ffmpeg.c::transcode_step` does not map
+directly. Treat this as new work, not a port.
+
+**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` for the n6.0 logic;
+`fftools_ffmpeg_sched.c` for the new n7.1.3 surface.
+
+## C5 — `set_report_callback(...)` + `forward_report()`
+
+- [x] **Stubbed.** `set_report_callback(ffmpeg_report_callback fn)` defined
+      in `fftools_ffmpeg.c` with a `__thread`-scoped `report_callback`
+      pointer. Set is honoured (pointer is stored) but `forward_report()`
+      is **not** wired into `print_report()` — no progress events fire.
+      chat-kmp doesn't consume them; if a future consumer does, add the
+      dispatch in `print_report()`.
+
+**Status: SYMBOL REQUIRED; FUNCTIONALITY OPTIONAL for chat-kmp.**
+
+**Minimum viable.** Add to `fftools_ffmpeg.c`:
+
+```c
+typedef void (*ffmpeg_report_callback)(int, float, float, int64_t, double, double, double);
+static __thread ffmpeg_report_callback report_callback = NULL;
+
+void set_report_callback(ffmpeg_report_callback fn) {
+    report_callback = fn;
+}
+```
+
+The wrapper signature is what the prior fork settled on as of 2023-09; if a
+future consumer needs progress reporting, also re-introduce the
+`forward_report()` call inside `print_report()` to dispatch to the
+callback. chat-kmp tracks progress externally (out_time_ms parsing on
+desktop) so this is not urgent.
+
+**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` — search for
+`forward_report` and `report_callback`.
+
+## C6 — stderr / setvbuf / signal handler hygiene
+
+- [x] Removed `setvbuf(stderr, NULL, _IONBF, 0)` from `ffmpeg_execute()`
+- [x] Removed `fflush(stderr)` from `print_report()` in `fftools_ffmpeg.c`
+- [ ] Signal handler neutering — deferred. `sigterm_handler()`,
+      `sigaction()` setup, and the SIGNAL macro calls in `term_init()`
+      still register with the host process. Acceptable for chat-kmp
+      because (a) it runs FFmpeg behind a coroutine and doesn't share
+      signal state with running transcodes and (b) the n6.0 build had the
+      same behaviour. Revisit if Crashlytics / Sentry reports show signal
+      collisions in production.
+
+**Status: REQUIRED for safety in any embedded use; chat-kmp currently
+tolerates the absence on Android/iOS but the iOS bridge has had log
+ordering issues before — strongly recommended.**
+
+**Why.** When ffmpeg is a child of the chat-kmp host process, hijacking
+`stderr` and registering signal handlers stomps on the host's own log
+plumbing and crash reporter (Crashlytics / Sentry). Removing these calls
+keeps the host in control.
+
+**Reference.** Look for `setvbuf` and `signal(SIGTERM, ...)` in the n6.0
+patches.
+
+## C7 — `fftools_` `#include` prefix
+
+- [x] **Already applied by the replay script.** `replay.sh` rewrites every
+      `#include "header.h"` → `#include "fftools_header.h"` for the set
+      of fftools headers.
+
+**Status: ALREADY DONE.** Verify by grepping `git diff stock-n7.1.3..HEAD --
+'*/fftools_*.c' | grep '#include "ffmpeg.h"'` — must return empty.
+
+## C8 — License + changelog header comment
+
+- [ ] Each customized `fftools_*.c` carries a `Copyright (c) <year>
+      Homebase` + a changelog of applied customizations at the top.
+
+**Status: STYLE / ATTRIBUTION.** Not load-bearing for the build, but the
+historical convention (and a useful self-documenting record). When applying
+any of C1–C6 above to a file, also add a brief changelog entry to its top
+comment block. Format follows the n6.0 vendored set:
+
+```
+/*
+ * Homebase ffmpeg-kit customizations on top of stock FFmpeg n7.1.3
+ *
+ * <date> — <summary>
+ * --------------------------------------------------------
+ * - <bullet of what changed and why>
+ */
+```
+
+# Verification matrix against chat-kmp's actual usage
+
+chat-kmp exercises a narrow slice of ffmpeg-kit. Each row below is a
+command pattern it issues; the customizations listed are the ones that must
+work for that pattern to succeed end-to-end.
+
+| chat-kmp scenario | Commands issued | Customizations exercised |
+| --- | --- | --- |
+| Thumbnail extraction | `-i in -frames:v 1 out.png` | C1, C2 |
+| Video compression (libx264 fallback) | `-i in -c:v libx264 -b:v 3000k -vf scale='min(1280,iw)':-2 -preset fast out` | C1, C2, C5 (stub), C6 |
+| HW-accelerated compression (Android) | `-c:v h264_mediacodec` variant | C1, C2 — relies on Android NDK MediaCodec being linked at FFmpeg build (configure flag, not a customization) |
+| HLS segmentation (copy codec) | `-codec:v copy -codec:a copy -hls_time 6 -hls_flags single_file -f hls -hls_segment_filename ...` | C1, C2 |
+| HLS encryption (AES-128) | `-hls_key_info_file keyinfo.txt -f hls ...` | C1, C2 — relies on stock HLS muxer support, no customization needed |
+| HLS → MP4 remux | `-i index.m3u8 -c copy -bsf:a aac_adtstoasc -movflags +faststart out.mp4` | C1, C2 |
+| Rotation probe | `ffprobe -v quiet -select_streams v:0 -show_entries side_data_list=... -of json=compact=1 in.mp4` | C1 (ffprobe path), C2 |
+| FFprobe getMediaInformation | `FFprobeKit.getMediaInformation(path)` | C1 (ffprobe path), C2 |
+
+# Suggested work order for the n7.1.3 customization pass
+
+1. **C1 + C2** together — entry-point renames + setjmp/longjmp. This is the
+   minimum to get a linkable library. After this, `nm` shows the symbols
+   and the wrapper links.
+2. **C4 + C5 stubs** — no-op stubs for `cancel_operation` and
+   `set_report_callback`. ~10 lines total. Library is now wrappable.
+3. **C6** — strip the stderr/signal hygiene issues. Safer for embedded use,
+   no risk of regression for chat-kmp since it currently works around
+   these issues at the bridge level.
+4. **C3** — thread-local globals. Only matters if multiple threads ever
+   call FFmpeg concurrently; defer if time is tight.
+5. **CI green** on Android arm64-v8a + iOS arm64 sim, run the chat-kmp
+   command patterns from the table above against a built artifact, then
+   tag `n7.1.3-customized` and pre-release `7.1.0-pre.1`.
+6. **chat-kmp integration soak** — swap the local AAR
+   `gradle/local-repo/id/homebase/libs/ffmpeg-kit/1.0/` with the new
+   build, run the existing chat-kmp test cases (thumbnail, HLS, AES-128
+   playlist). If green, promote.
+
+# How to update this document
+
+When applying any C-item above, check its checkbox. If a new customization
+is added (something not in C1–C8), add a new section in numbered order and
+explain why. If a customization is *removed* because its consumer no
+longer needs it, mark it `~~struck~~` rather than deleting — future
+upgrades will want to know it was once there.

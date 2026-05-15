@@ -69,6 +69,15 @@
 #include "fftools_cmdutils.h"
 #include "fftools_opt_common.h"
 
+/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n7.1.3.
+ * See CUSTOMIZATION.md at the repo root.
+ *
+ *   C1 — main() renamed ffprobe_execute()
+ *   C2 — body wrapped in setjmp(ex_buf__); fatal errors longjmp via
+ *        exit_program() instead of calling exit()
+ */
+#include "ffmpegkit_exception.h"
+
 #include "libavutil/thread.h"
 
 #if !HAVE_THREADS
@@ -3914,7 +3923,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
 
     ifile->streams = av_calloc(fmt_ctx->nb_streams, sizeof(*ifile->streams));
     if (!ifile->streams)
-        exit(1);
+        exit_program(1); /* C2: longjmps to ffprobe_execute */
     ifile->nb_streams = fmt_ctx->nb_streams;
 
     /* bind a decoder to each input stream */
@@ -3945,15 +3954,15 @@ static int open_input_file(InputFile *ifile, const char *filename,
             err = filter_codec_opts(codec_opts, stream->codecpar->codec_id,
                                     fmt_ctx, stream, codec, &opts, NULL);
             if (err < 0)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             ist->dec_ctx = avcodec_alloc_context3(codec);
             if (!ist->dec_ctx)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             err = avcodec_parameters_to_context(ist->dec_ctx, stream->codecpar);
             if (err < 0)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             if (do_show_log) {
                 // For loging it is needed to disable at least frame threads as otherwise
@@ -3969,7 +3978,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
             if (avcodec_open2(ist->dec_ctx, codec, &opts) < 0) {
                 av_log(NULL, AV_LOG_WARNING, "Could not open codec for input stream %d\n",
                        stream->index);
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
             }
 
             if ((t = av_dict_iterate(opts, NULL))) {
@@ -4628,13 +4637,20 @@ static inline int check_section_show_entries(int section_id)
             do_show_##varname = 1;                                      \
     } while (0)
 
-int main(int argc, char **argv)
+/* C1 — entry point: main() renamed to ffprobe_execute() so the wrapper
+ * layer can invoke ffprobe as a callable function. */
+int ffprobe_execute(int argc, char **argv)
 {
     const Writer *w;
     WriterContext *wctx;
     char *buf;
     char *w_name = NULL, *w_args = NULL;
     int ret, input_ret, i;
+
+    /* C2 — catch exit_program() from anywhere deeper in the stack. */
+    if (setjmp(ex_buf__) != 0) {
+        return longjmp_value;
+    }
 
     init_dynload();
 

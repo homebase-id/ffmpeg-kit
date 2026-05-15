@@ -919,4 +919,16 @@ int view_specifier_parse(const char **pspec, ViewSpecifier *vs);
 int muxer_thread(void *arg);
 int encoder_thread(void *arg);
 
+/* Homebase ffmpeg-kit customizations — symbols exposed by fftools_ffmpeg.c
+ * for the wrapper layer (ffmpegkit.c on Android, FFmpegKitConfig.m on
+ * Apple). See CUSTOMIZATION.md C1, C4, C5. */
+int ffmpeg_execute(int argc, char **argv);
+void cancel_operation(long id);
+
+typedef void (*ffmpeg_report_callback)(int frameNumber, float fps,
+                                       float quality, int64_t size,
+                                       double time, double bitrate,
+                                       double speed);
+void set_report_callback(ffmpeg_report_callback fn);
+
 #endif /* FFTOOLS_FFMPEG_H */
