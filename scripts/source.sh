@@ -4,12 +4,6 @@
 # 1. library name
 # 2. source type 1/2/3
 #
-# NOTE: Library pins bumped 2026-05 as part of FFmpeg n6.0 -> n7.1.3 upgrade.
-# Many sources still point at arthenica/* mirror forks. If a tag below is not
-# present on the arthenica mirror at build time, either push the tag upstream
-# of the arthenica mirror or switch SOURCE_REPO_URL to the canonical upstream
-# repository (most are clean mirrors with no fork-specific patches).
-#
 get_library_source() {
   case $1 in
   config)
@@ -24,17 +18,17 @@ get_library_source() {
     ;;
   cpu-features)
     SOURCE_REPO_URL="https://github.com/arthenica/cpu_features"
-    SOURCE_ID="v0.10.1"
+    SOURCE_ID="v0.8.0"
     SOURCE_TYPE="TAG"
     ;;
   dav1d)
     SOURCE_REPO_URL="https://github.com/arthenica/dav1d"
-    SOURCE_ID="1.5.1"
+    SOURCE_ID="1.2.1"
     SOURCE_TYPE="TAG"
     ;;
   expat)
     SOURCE_REPO_URL="https://github.com/arthenica/libexpat"
-    SOURCE_ID="R_2_6_4"
+    SOURCE_ID="R_2_5_0"
     SOURCE_TYPE="TAG"
     ;;
   ffmpeg)
@@ -44,47 +38,47 @@ get_library_source() {
     ;;
   fontconfig)
     SOURCE_REPO_URL="https://github.com/arthenica/fontconfig"
-    SOURCE_ID="2.15.0"
+    SOURCE_ID="2.14.2"
     SOURCE_TYPE="TAG"
     ;;
   freetype)
     SOURCE_REPO_URL="https://github.com/arthenica/freetype2"
-    SOURCE_ID="VER-2-13-3"
+    SOURCE_ID="VER-2-13-0"
     SOURCE_TYPE="TAG"
     ;;
   fribidi)
     SOURCE_REPO_URL="https://github.com/arthenica/fribidi"
-    SOURCE_ID="v1.0.16"
+    SOURCE_ID="v1.0.13"
     SOURCE_TYPE="TAG"
     ;;
   giflib)
     SOURCE_REPO_URL="https://github.com/arthenica/giflib"
-    SOURCE_ID="5.2.2"
+    SOURCE_ID="5.2.1"
     SOURCE_TYPE="TAG"
     ;;
   gmp)
     SOURCE_REPO_URL="https://github.com/arthenica/gmp"
-    SOURCE_ID="v6.3.0"
+    SOURCE_ID="v6.2.1"
     SOURCE_TYPE="TAG"
     ;;
   gnutls)
     SOURCE_REPO_URL="https://github.com/arthenica/gnutls"
-    SOURCE_ID="3.8.9"
+    SOURCE_ID="3.7.9"
     SOURCE_TYPE="TAG"
     ;;
   harfbuzz)
     SOURCE_REPO_URL="https://github.com/arthenica/harfbuzz"
-    SOURCE_ID="10.4.0"
+    SOURCE_ID="8.0.1"
     SOURCE_TYPE="TAG"
     ;;
   jpeg)
     SOURCE_REPO_URL="https://github.com/arthenica/libjpeg-turbo"
-    SOURCE_ID="3.1.0"
+    SOURCE_ID="3.0.0"
     SOURCE_TYPE="TAG"
     ;;
   kvazaar)
     SOURCE_REPO_URL="https://github.com/arthenica/kvazaar"
-    SOURCE_ID="v2.3.1"
+    SOURCE_ID="v2.2.0"
     SOURCE_TYPE="TAG"
     ;;
   lame)
@@ -94,22 +88,22 @@ get_library_source() {
     ;;
   leptonica)
     SOURCE_REPO_URL="https://github.com/arthenica/leptonica"
-    SOURCE_ID="1.85.0"
+    SOURCE_ID="1.83.1"
     SOURCE_TYPE="TAG"
     ;;
   libaom)
     SOURCE_REPO_URL="https://github.com/arthenica/libaom"
-    SOURCE_ID="v3.12.1"
+    SOURCE_ID="v3.6.1"
     SOURCE_TYPE="TAG"
     ;;
   libass)
     SOURCE_REPO_URL="https://github.com/arthenica/libass"
-    SOURCE_ID="0.17.3"
+    SOURCE_ID="0.17.1"
     SOURCE_TYPE="TAG"
     ;;
   libiconv)
     SOURCE_REPO_URL="https://github.com/arthenica/libiconv"
-    SOURCE_ID="v1.18"
+    SOURCE_ID="v1.17"
     SOURCE_TYPE="TAG"
     ;;
   libilbc)
@@ -124,7 +118,7 @@ get_library_source() {
     ;;
   libpng)
     SOURCE_REPO_URL="https://github.com/arthenica/libpng"
-    SOURCE_ID="v1.6.49"
+    SOURCE_ID="v1.6.40"
     SOURCE_TYPE="TAG"
     ;;
   libsamplerate)
@@ -134,12 +128,12 @@ get_library_source() {
     ;;
   libsndfile)
     SOURCE_REPO_URL="https://github.com/arthenica/libsndfile"
-    SOURCE_ID="1.2.2"
+    SOURCE_ID="1.2.0"
     SOURCE_TYPE="TAG"
     ;;
   libtheora)
     SOURCE_REPO_URL="https://github.com/arthenica/theora"
-    SOURCE_ID="v1.2.0"
+    SOURCE_ID="v1.1.1"
     SOURCE_TYPE="TAG"
     ;;
   libuuid)
@@ -159,22 +153,22 @@ get_library_source() {
     ;;
   libvpx)
     SOURCE_REPO_URL="https://github.com/arthenica/libvpx"
-    SOURCE_ID="v1.15.2"
+    SOURCE_ID="v1.13.0"
     SOURCE_TYPE="TAG"
     ;;
   libwebp)
     SOURCE_REPO_URL="https://github.com/arthenica/libwebp"
-    SOURCE_ID="v1.5.0"
+    SOURCE_ID="v1.3.1"
     SOURCE_TYPE="TAG"
     ;;
   libxml2)
     SOURCE_REPO_URL="https://github.com/arthenica/libxml2"
-    SOURCE_ID="v2.13.5"
+    SOURCE_ID="v2.11.4"
     SOURCE_TYPE="TAG"
     ;;
   nettle)
     SOURCE_REPO_URL="https://github.com/arthenica/nettle"
-    SOURCE_ID="nettle_3.10.1_release_20241223"
+    SOURCE_ID="nettle_3.8.1_release_20220727"
     SOURCE_TYPE="TAG"
     ;;
   opencore-amr)
@@ -184,17 +178,17 @@ get_library_source() {
     ;;
   openh264)
     SOURCE_REPO_URL="https://github.com/arthenica/openh264"
-    SOURCE_ID="v2.5.1"
+    SOURCE_ID="v2.3.1"
     SOURCE_TYPE="TAG"
     ;;
   openssl)
     SOURCE_REPO_URL="https://github.com/arthenica/openssl"
-    SOURCE_ID="openssl-3.4.1"
+    SOURCE_ID="openssl-3.1.1"
     SOURCE_TYPE="TAG"
     ;;
   opus)
     SOURCE_REPO_URL="https://github.com/arthenica/opus"
-    SOURCE_ID="v1.5.2"
+    SOURCE_ID="v1.4"
     SOURCE_TYPE="TAG"
     ;;
   rubberband)
@@ -214,7 +208,7 @@ get_library_source() {
     ;;
   snappy)
     SOURCE_REPO_URL="https://github.com/arthenica/snappy"
-    SOURCE_ID="1.2.2"
+    SOURCE_ID="1.1.9"
     SOURCE_TYPE="TAG"
     ;;
   soxr)
@@ -229,17 +223,17 @@ get_library_source() {
     ;;
   srt)
     SOURCE_REPO_URL="https://github.com/arthenica/srt"
-    SOURCE_ID="v1.5.4"
+    SOURCE_ID="v1.5.2"
     SOURCE_TYPE="TAG"
     ;;
   tesseract)
     SOURCE_REPO_URL="https://github.com/arthenica/tesseract"
-    SOURCE_ID="5.5.0"
+    SOURCE_ID="5.3.2"
     SOURCE_TYPE="TAG"
     ;;
   tiff)
     SOURCE_REPO_URL="https://github.com/arthenica/libtiff"
-    SOURCE_ID="v4.7.0"
+    SOURCE_ID="v4.1.0"
     SOURCE_TYPE="TAG"
     ;;
   twolame)
@@ -254,16 +248,12 @@ get_library_source() {
     ;;
   x264)
     SOURCE_REPO_URL="https://github.com/arthenica/x264"
-    # x264 has no formal release tags; this is HEAD of the stable branch as of
-    # the 2026-05 upgrade. Update by fetching arthenica/x264 stable and
-    # replacing this hash. If the arthenica mirror is stale, switch to the
-    # upstream code.videolan.org/videolan/x264 stable branch.
     SOURCE_ID="eaa68fad9e5d201d42fde51665f2d137ae96baf0"
     SOURCE_TYPE="COMMIT"
     ;;
   x265)
     SOURCE_REPO_URL="https://github.com/arthenica/x265"
-    SOURCE_ID="4.1"
+    SOURCE_ID="3.4"
     SOURCE_TYPE="TAG"
     ;;
   xvidcore)
