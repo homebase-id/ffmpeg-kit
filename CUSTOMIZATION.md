@@ -229,6 +229,38 @@ patches.
 **Status: ALREADY DONE.** Verify by grepping `git diff stock-n7.1.3..HEAD --
 '*/fftools_*.c' | grep '#include "ffmpeg.h"'` — must return empty.
 
+## C9 — `AV_LOG_STDERR` custom log-level sentinel
+
+- [x] Defined `#define AV_LOG_STDERR -16` in `fftools_ffmpeg.h` (all
+      three platform trees).
+
+**Status: REQUIRED for chat-kmp.** The wrapper layer
+(`android/.../cpp/ffmpegkit.c`, `apple/src/FFmpegKitConfig.m`,
+`linux/src/FFmpegKitConfig.cpp`) references `AV_LOG_STDERR` in a
+`switch` case (mapping to the string `"stderr"`) and in the
+quiet-filter logic (`level != AV_LOG_STDERR` bypasses
+`AV_LOG_QUIET`).
+
+**What's going on.** This constant is **not** a standard FFmpeg
+symbol — it has never existed in `libavutil/log.h`. The ffmpeg-kit
+fork historically defined it in `fftools_cmdutils.h` as a sentinel
+value `-16` (below `AV_LOG_QUIET = -8`, so it can't collide with any
+real log level) so that fork-modified fftools code could emit messages
+the wrapper would always surface. When we re-snapshotted fftools from
+stock n7.1.3, the define was lost. The wrapper compile then breaks
+with `use of undeclared identifier 'AV_LOG_STDERR'`.
+
+**How to apply.** Add the define at the bottom of `fftools_ffmpeg.h`
+(after the other ffmpeg-kit customization symbols) and propagate to
+all three platform trees. That header is already included by both the
+vendored fftools and the wrapper layer.
+
+**Reference.** Search for `AV_LOG_STDERR` in `pre-7.1.3-baseline`:
+the old `fftools_cmdutils.h:82` had the define. Multiple n6.0 fftools
+.c files also used `av_log(NULL, AV_LOG_STDERR, ...)` to tag
+fork-specific output — if we ever re-introduce those custom log
+calls in the fftools port, the same define covers them.
+
 ## C8 — License + changelog header comment
 
 - [ ] Each customized `fftools_*.c` carries a `Copyright (c) <year>

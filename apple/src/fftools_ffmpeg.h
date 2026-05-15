@@ -931,4 +931,13 @@ typedef void (*ffmpeg_report_callback)(int frameNumber, float fps,
                                        double speed);
 void set_report_callback(ffmpeg_report_callback fn);
 
+/* C9 — custom log level used by the wrapper layer to mark messages
+ * that should always reach the host's stderr-style sink regardless of
+ * the configured quiet level. Sentinel value below AV_LOG_QUIET (-8)
+ * so it cannot collide with any standard FFmpeg log level. Used by
+ * ffmpegkit.c / FFmpegKitConfig.m switch and quiet-filter logic.
+ * (Standard FFmpeg never had this constant in libavutil/log.h — it was
+ * always a fork-local define.) */
+#define AV_LOG_STDERR    -16
+
 #endif /* FFTOOLS_FFMPEG_H */
