@@ -85,7 +85,10 @@ i386)
   BITCODE_FLAGS=""
   ;;
 x86-64)
-  TARGET_CPU="x86_64"
+  # TARGET_CPU goes through to clang as -march=$TARGET_CPU. clang only
+  # accepts the hyphenated 'x86-64'. TARGET_ARCH stays underscored as
+  # FFmpeg's internal arch name.
+  TARGET_CPU="x86-64"
   TARGET_ARCH="x86_64"
   ASM_OPTIONS=" --disable-neon --disable-asm"
   BITCODE_FLAGS=""
