@@ -381,6 +381,35 @@ the build scripts going forward.
       `--arch=` expects.
 - **Commit:** `253fe8b`
 
+### U7 — `compat/va_copy.h` must be installed into the prebuilt include dir
+
+- [x] Fixed
+- **Symptom:** wrapper build past FFmpeg compile, then:
+      ```
+      fftools_cmdutils.c:33:10: fatal error: 'compat/va_copy.h' file not found
+      ```
+- **Root cause:** stock FFmpeg `fftools/cmdutils.c` includes
+      `"compat/va_copy.h"` — a Windows-MSVC compatibility shim
+      (no-op on Android/Apple/Linux). When the file lives inside the
+      FFmpeg source tree the relative include resolves fine; when we
+      vendor it into ffmpeg-kit's platform trees and compile against
+      the *installed* `prebuilt/.../ffmpeg/include/` dir, `compat/`
+      isn't there because FFmpeg's `make install` doesn't ship
+      internal compat headers.
+- **n6.0-era handling:** the fork manually *patched* the
+      `#include "compat/va_copy.h"` line out of `fftools_cmdutils.c`.
+      That patch was lost when we re-snapshotted fftools from stock.
+- **Chosen fix:** install the header instead of re-patching the
+      source. Same pattern the build script already uses for
+      `libavcodec/mathops.h` and the `libavutil/x86/asm.h` set —
+      `mkdir -p .../include/compat` + `overwrite_file ...
+      compat/va_copy.h`. Done in all three platform `ffmpeg.sh`.
+- **Why install vs patch:** patching `fftools_cmdutils.c` would live
+      in the vendored fftools (wiped by `replay.sh` every upgrade).
+      Installing the header is a build-script change (survives
+      replays). Same "smooth future upgrades" principle as U5.
+- **Commit:** _set on commit_
+
 ### U6 — Wrapper files missing `<string.h>` / `<cstring>` includes
 
 - [x] Fixed
