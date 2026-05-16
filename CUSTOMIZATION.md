@@ -381,6 +381,39 @@ the build scripts going forward.
       `--arch=` expects.
 - **Commit:** `253fe8b`
 
+### U8 — Wrapper CFLAGS need extra `-Wno-*` flags for stock fftools code
+
+- [x] Fixed
+- **Symptom:** wrapper compile fails with:
+      ```
+      fftools_cmdutils.c:149:18: error: using the result of an assignment as a
+        condition without parentheses [-Werror,-Wparentheses]
+      ```
+      Triggered by stock FFmpeg's `while (x = func())` style of
+      assignment-in-condition.
+- **Root cause:** stock FFmpeg fftools code uses C idioms (assignment
+      in `while`/`if` conditions, `char*`/`unsigned char*` mixing,
+      calls to libc functions newer NDKs deprecate) that FFmpeg's
+      own configure suppresses via its CFLAGS. When we vendor those
+      files into ffmpeg-kit's platform trees, they're compiled under
+      Android.mk's `MY_CFLAGS` which has `-Wall -Werror` without the
+      matching `-Wno-*` overrides. Pretty much guaranteed to surface
+      multiple times across upgrades as upstream code drifts.
+- **Fix:** extend `MY_CFLAGS` in `android/jni/Android.mk` with the
+      three `-Wno-*` flags FFmpeg's own build uses to silence its
+      own style:
+      `-Wno-parentheses -Wno-pointer-sign -Wno-deprecated-declarations`
+- **Why not patch the source:** parenthesising every assignment-in-
+      condition in vendored fftools_cmdutils.c would be a customization
+      lost on every upgrade. Adjusting the build's CFLAGS once
+      survives forever.
+- **Apple/Linux equivalents:** the Apple `Makefile.am` and Linux
+      `Makefile.am` derive CFLAGS from autotools — they typically
+      inherit `-Wno-*` from FFmpeg's pkg-config output, so the issue
+      may not surface there. If it does in a future Apple/Linux CI
+      run, add the same flags to those build files.
+- **Commit:** _set on commit_
+
 ### U7 — `compat/va_copy.h` must be installed into the prebuilt include dir
 
 - [x] Fixed
