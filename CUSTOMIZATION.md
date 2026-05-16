@@ -502,6 +502,30 @@ the build scripts going forward.
       `--arch=` expects.
 - **Commit:** `253fe8b`
 
+### U11 — Bump GitHub Actions to Node 24-native versions
+
+- [x] Fixed
+- **Symptom (annotation, not error):** every workflow run shows
+      *"Node.js 20 actions are deprecated. ... Node.js 20 will be removed
+      from the runner on September 16th, 2026."*
+- **Root cause:** GitHub deprecated Node 20 on Actions runners. The v3
+      and v4 majors of `actions/checkout`, `actions/setup-java`, and
+      `actions/upload-artifact` all run on Node 20. After Sept 16,
+      2026 they stop working entirely.
+- **Fix:** bump to the Node 24-native majors across **every**
+      workflow file (we had v3 / v4 in different places):
+      * `actions/checkout@v4` → `actions/checkout@v6`
+      * `actions/setup-java@v3`, `@v4` → `actions/setup-java@v5`
+      * `actions/upload-artifact@v4` → `actions/upload-artifact@v7`
+      Done in 11 files via `sed -i 'actions/X@vN/actions/X@vM'`.
+- **Why do it now, not later:** this repo is touched maybe once every
+      18 months for a major FFmpeg bump. If we leave it, the next
+      person (probably future-you) shows up to a broken CI and can't
+      even start the upgrade work until they untangle the Actions
+      deprecation. Take the 5-minute hit now to keep CI green
+      indefinitely.
+- **Commit:** _set on commit_
+
 ### U10 — Stock fftools `#include <stdbit.h>` (C23) — install FFmpeg's compat shim
 
 - [x] Fixed
