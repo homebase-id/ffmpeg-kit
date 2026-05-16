@@ -798,11 +798,77 @@ forcing another workaround. Thin slices are what Xcode 14+ expects.
 source customization, no FFmpeg API work. Likely a few flag tweaks in
 `./ios.sh` and the apple Makefile.am invocations.
 
+## B3 — AAR / xcframework size: trim to chat-kmp's actual codec set
+
+- [ ] Switch from `--full --enable-gpl` (kitchen sink) to a
+      `--disable-everything` + per-feature-enable build list scoped
+      to what chat-kmp actually uses.
+
+**Why:** the n7.1.3 AAR ships at ~86 MB (up from ~51 MB on n6.0,
+driven by enabling postproc + n7 feature expansion). chat-kmp's
+actual codec needs from the integration survey:
+
+| Need | Used for |
+|---|---|
+| H.264 encode/decode (libx264, h264_mediacodec, h264_videotoolbox) | video |
+| AAC encode/decode | audio |
+| HLS muxer + AES-128 encryption | streaming |
+| `aac_adtstoasc` bitstream filter | HLS→MP4 remux |
+| `scale` filter | downscale to max 1280px |
+| `movflags +faststart` | MP4 muxer flag |
+| `side_data_list` JSON in ffprobe | rotation probe |
+| VP9 decode | source compat |
+| Opus, MP3, WebP | audio + thumbnail fallback paths |
+
+Everything else (huge swaths of obscure muxers, decoders, protocols,
+filters) is dead weight in the binary.
+
+**Suggested starting flag set** (refine per CI cycle):
+
+```sh
+./android.sh --enable-gpl --enable-x264 --enable-libwebp \
+    --disable-everything \
+    --enable-decoder=h264,aac,vp9,opus,mp3,png,mjpeg \
+    --enable-encoder=libx264,h264_mediacodec,aac \
+    --enable-muxer=mp4,hls,mpegts,webm \
+    --enable-demuxer=mov,mp4,hls,mpegts,matroska \
+    --enable-parser=h264,aac,vp9 \
+    --enable-filter=scale,aresample \
+    --enable-protocol=file,http,https,crypto \
+    --enable-bsf=aac_adtstoasc,h264_mp4toannexb
+```
+
+The `--disable-everything` flag is exposed by FFmpeg's configure and
+turns off every codec/muxer/demuxer/protocol; the per-feature
+enables then opt back in only what we need.
+
+**Realistic target:** ~25-35 MB AAR (≈3× shrink). The unused codec
+.so contents in libavcodec are by far the biggest line items.
+
+**Risk:** undersizing — accidentally omitting a feature chat-kmp
+uses at runtime. Mitigation: run the full chat-kmp test suite plus
+manual smoke (upload videos in various source formats) before
+shipping. If a feature is missing the runtime error message names
+the codec/protocol; trivially add the enable flag and rebuild.
+
+**Where the flag set lives** (when applied):
+* `.github/workflows/build-android.yml` — `run the build script` step
+* `.github/workflows/build-ios.yml` — same step (mirrored for
+  `./ios.sh`)
+* the equivalent macOS / tvOS workflows when those are added
+
+**Why deferred:** the n7.1.3 upgrade was already proving complex.
+Shipping the bigger-but-functional AAR first lets chat-kmp consumers
+test the upgrade independently of a size-optimization change. Do
+this in a focused follow-up PR.
+
 ## Verification (after fix)
 - B1: produced `ffmpegkit.framework` Mach-O passes `codesign -dv` as
       unsigned.
 - B2: `lipo -info <slice>/ffmpegkit.framework/ffmpegkit` reports a
       single architecture per slice.
+- B3: produced AAR ≤ 35 MB; chat-kmp's full test suite still passes;
+      manual smoke (video upload + HLS encryption) green.
 - chat-kmp can drop its signature-strip script and its fat-binary
   workaround.
 
