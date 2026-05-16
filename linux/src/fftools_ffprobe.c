@@ -110,8 +110,9 @@ typedef struct InputFile {
     int       nb_streams;
 } InputFile;
 
-const char program_name[] = "ffprobe";
-const int program_birth_year = 2007;
+/* C10: program_name / program_birth_year are mutable thread-locals defined in
+ * fftools_cmdutils.c, set at the top of ffprobe_execute() below. See
+ * CUSTOMIZATION.md C10 for rationale. */
 
 static int do_bitexact = 0;
 static int do_count_frames = 0;
@@ -4353,7 +4354,11 @@ static int opt_print_filename(void *optctx, const char *opt, const char *arg)
     return print_input_filename ? 0 : AVERROR(ENOMEM);
 }
 
-void show_help_default(const char *opt, const char *arg)
+/* C10: stock declares this as `void show_help_default` — same name as the
+ * ffmpeg version in fftools_ffmpeg_opt.c, which collides at link time.
+ * Renamed to avoid the conflict. The shared opt_common.c show_help() routes
+ * default help to ffmpeg's version (chat-kmp doesn't exercise ffprobe -h). */
+void show_help_default_ffprobe(const char *opt, const char *arg)
 {
     av_log_set_callback(log_callback_help);
     show_usage();
@@ -4651,6 +4656,11 @@ int ffprobe_execute(int argc, char **argv)
     if (setjmp(ex_buf__) != 0) {
         return longjmp_value;
     }
+
+    /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
+    static char _program_name[] = "ffprobe";
+    program_name = _program_name;
+    program_birth_year = 2007;
 
     init_dynload();
 

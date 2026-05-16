@@ -240,6 +240,85 @@ existed in n6.0 era. If a future consumer needs always-surface log
 tagging, re-introduce the define plus the wrapper switch case plus
 emit sites in vendored fftools.
 
+## C10 — Resolve duplicate symbols between linked-together ffmpeg + ffprobe
+
+- [x] `program_name` / `program_birth_year` made mutable `__thread`
+      globals defined in `fftools_cmdutils.c`, declared in
+      `fftools_cmdutils.h`, set per-tool at the top of
+      `ffmpeg_execute()` and `ffprobe_execute()`.
+- [x] `show_help_default` renamed to `show_help_default_ffprobe` in
+      `fftools_ffprobe.c`.
+
+**Status: REQUIRED.** Without this, the wrapper link fails with:
+
+```
+ld: error: duplicate symbol: program_name
+ld: error: duplicate symbol: program_birth_year
+ld: error: duplicate symbol: show_help_default
+```
+
+**Root cause.** Stock FFmpeg builds `ffmpeg` and `ffprobe` as two
+separate executables. Each `.c` file independently defines
+`const char program_name[]` (one `"ffmpeg"`, one `"ffprobe"`),
+`const int program_birth_year` (2000 vs 2007), and a tool-specific
+`show_help_default()`. ffmpeg-kit links **both** into a single
+`libffmpegkit.so` — the linker sees three pairs of conflicting
+definitions and bails.
+
+**The accepted pattern (inherited from the n6.0 fork).** Convert the
+two `const` globals into mutable thread-locals defined once in
+`fftools_cmdutils.c`:
+
+```c
+__thread char *program_name = NULL;
+__thread int program_birth_year = 0;
+```
+
+Change the header declarations accordingly:
+
+```c
+extern __thread char *program_name;
+extern __thread int program_birth_year;
+```
+
+Each `*_execute()` entry sets its own values:
+
+```c
+/* in ffmpeg_execute() */
+static char _program_name[] = "ffmpeg";
+program_name = _program_name;
+program_birth_year = 2000;
+```
+
+(`static` storage so the array outlives the function call — safe for
+serial use; thread-local pointer keeps multi-thread invocations
+distinct.) Rename ffprobe's `show_help_default` → `show_help_default_ffprobe`
+so it no longer collides with the ffmpeg version. The shared
+`fftools_opt_common.c::show_help()` falls through to ffmpeg's version
+(chat-kmp doesn't exercise `ffprobe -h`; if a future consumer needs
+real ffprobe help, route `-h` through the ffprobe options table to
+the renamed function).
+
+**Why this lives in fftools (gets re-applied each upgrade).** The
+definitions and the `extern` declarations have to be in
+`fftools_cmdutils.{c,h}` because cmdutils is what every fftools file
+includes; we can't move them to a fork-local header without also
+patching every fftools source to use the new include path. The
+runtime assignment in `*_execute()` also has to live in the renamed
+fftools sources. Result: this customization is wiped by `replay.sh`
+on every upgrade. The diff is small (~6 hunks) but mechanical.
+
+**Reference n6.0 baseline** is the authoritative example. Run:
+
+```
+git diff pre-7.1.3-baseline HEAD -- '*/fftools_cmdutils.h' \
+                                    '*/fftools_cmdutils.c' \
+                                    '*/fftools_ffmpeg.c'   \
+                                    '*/fftools_ffprobe.c'  | grep -E 'program_name|program_birth_year|show_help_default'
+```
+
+to see the exact diff to replay.
+
 ## C8 — License + changelog header comment
 
 - [ ] Each customized `fftools_*.c` carries a `Copyright (c) <year>
@@ -352,6 +431,15 @@ same categories.
    Required for pre-C23 toolchains (NDK r25b ships clang 14).
    Verify it's in the header-install block of all three
    `<platform>/ffmpeg.sh`.
+10. **Duplicate-symbol resolution (C10 — yes, a customization not a
+    U-fix).** Stock ffmpeg.c and ffprobe.c each define `program_name`,
+    `program_birth_year`, and `show_help_default`. Linking both into
+    one `.so` collides. Apply C10's diff to the four fftools files
+    (`cmdutils.h`, `cmdutils.c`, `ffmpeg.c`, `ffprobe.c`) on every
+    upgrade — it's the only customization that lives inside fftools
+    and so is wiped by `replay.sh` each cycle. The C10 section below
+    has the exact text to apply; the n6.0 baseline tag is the
+    authoritative reference.
 
 ## n6.0 → n7.1.3 fixes (2026-05)
 

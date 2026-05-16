@@ -94,8 +94,9 @@
  */
 #include "ffmpegkit_exception.h"
 
-const char program_name[] = "ffmpeg";
-const int program_birth_year = 2000;
+/* C10: program_name / program_birth_year are mutable thread-locals defined in
+ * fftools_cmdutils.c. The per-tool values are set at the top of
+ * ffmpeg_execute() below. See CUSTOMIZATION.md C10 for rationale. */
 
 FILE *vstats_file;
 
@@ -992,6 +993,11 @@ int ffmpeg_execute(int argc, char **argv)
     if (setjmp(ex_buf__) != 0) {
         return longjmp_value;
     }
+
+    /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
+    static char _program_name[] = "ffmpeg";
+    program_name = _program_name;
+    program_birth_year = 2000;
 
     init_dynload();
 
