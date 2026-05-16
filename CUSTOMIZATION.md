@@ -336,9 +336,10 @@ same categories.
    -p .../include/compat` and `overwrite_file ... compat/va_copy.h`
    alongside the `mathops.h` block. Verify it's still there.
 7. **Wrapper CFLAGS (U8).** `MY_CFLAGS` in `android/jni/Android.mk`
-   must include `-Wno-parentheses -Wno-pointer-sign
-   -Wno-deprecated-declarations` to silence warnings stock fftools
-   code emits.
+   must include the full `-Wno-*` set documented in U8 (covers
+   `parentheses`, `pointer-sign`, `deprecated-declarations`, the
+   `unused-*` family). Stock fftools is warning-heavy; expect to add
+   more if a new `-Werror,-W<x>` surfaces.
 8. **`--enable-postproc` (U9).** FFmpeg's configure must NOT have
    `--disable-postproc` because stock fftools/ffprobe.c
    unconditionally includes `libpostproc/postprocess.h`. With
@@ -444,9 +445,21 @@ the build scripts going forward.
       matching `-Wno-*` overrides. Pretty much guaranteed to surface
       multiple times across upgrades as upstream code drifts.
 - **Fix:** extend `MY_CFLAGS` in `android/jni/Android.mk` with the
-      three `-Wno-*` flags FFmpeg's own build uses to silence its
-      own style:
-      `-Wno-parentheses -Wno-pointer-sign -Wno-deprecated-declarations`
+      `-Wno-*` flags FFmpeg's own build uses to silence its own style.
+      Current full set (each added in response to an actual CI
+      failure or as obvious neighbours):
+      ```
+      -Wno-parentheses        # assignment in if/while condition
+      -Wno-pointer-sign       # char* / unsigned char* mixing
+      -Wno-deprecated-declarations
+      -Wno-unused-variable
+      -Wno-unused-const-variable
+      -Wno-unused-but-set-variable
+      -Wno-unused-function
+      ```
+      `-Wno-unused-parameter` was already there. If a new
+      `-Werror,-W<something>` fires in a future build, add the matching
+      `-Wno-<something>` here and update this list.
 - **Why not patch the source:** parenthesising every assignment-in-
       condition in vendored fftools_cmdutils.c would be a customization
       lost on every upgrade. Adjusting the build's CFLAGS once
