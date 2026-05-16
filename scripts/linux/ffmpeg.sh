@@ -467,6 +467,10 @@ mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.l
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/compat/va_copy.h "${FFMPEG_LIBRARY_PATH}"/include/compat/va_copy.h 1>>"${BASEDIR}"/build.log 2>&1
+# FFmpeg n7's fftools unconditionally #include <stdbit.h> (C23 header).
+# Install the FFmpeg shim at the include root where plain <stdbit.h>
+# resolves to it (system gcc/clang on old distros may lack the real one).
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/stdbit/stdbit.h "${FFMPEG_LIBRARY_PATH}"/include/stdbit.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1

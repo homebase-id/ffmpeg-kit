@@ -520,6 +520,12 @@ mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.l
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/compat/va_copy.h "${FFMPEG_LIBRARY_PATH}"/include/compat/va_copy.h 1>>"${BASEDIR}"/build.log 2>&1
+# FFmpeg n7's fftools unconditionally #include <stdbit.h> (C23 header).
+# NDK r25b clang (clang 14) doesn't ship it. FFmpeg's own configure
+# falls back to compat/stdbit/stdbit.h via -I; our wrapper compile
+# doesn't get that flag, so install the shim at the include root where
+# plain <stdbit.h> resolves to it.
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/stdbit/stdbit.h "${FFMPEG_LIBRARY_PATH}"/include/stdbit.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1

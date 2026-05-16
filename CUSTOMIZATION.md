@@ -345,6 +345,13 @@ same categories.
    unconditionally includes `libpostproc/postprocess.h`. With
    `--enable-gpl` already set, postproc is the default — just ensure
    nothing re-disables it.
+9. **`<stdbit.h>` shim install (U10).** The build script must
+   install FFmpeg's `compat/stdbit/stdbit.h` shim to
+   `prebuilt/.../include/stdbit.h` so the wrapper compile can resolve
+   the C23 `<stdbit.h>` include that stock fftools_ffmpeg_dec.c uses.
+   Required for pre-C23 toolchains (NDK r25b ships clang 14).
+   Verify it's in the header-install block of all three
+   `<platform>/ffmpeg.sh`.
 
 ## n6.0 → n7.1.3 fixes (2026-05)
 
@@ -401,6 +408,37 @@ the build scripts going forward.
       (underscored) — that's FFmpeg's internal arch name and what
       `--arch=` expects.
 - **Commit:** `253fe8b`
+
+### U10 — Stock fftools `#include <stdbit.h>` (C23) — install FFmpeg's compat shim
+
+- [x] Fixed
+- **Symptom:** wrapper compile fails with:
+      ```
+      fftools_ffmpeg_dec.c:19:10: fatal error: 'stdbit.h' file not found
+      ```
+- **Root cause:** FFmpeg n7's `fftools/ffmpeg_dec.c` (and possibly
+      other sources in future versions) unconditionally `#include
+      <stdbit.h>` — a **C23** header for bit-manipulation utilities.
+      NDK r25b ships clang 14, which is pre-C23. FFmpeg's own
+      `configure` detects this and adds `-I$(SRC_PATH)/compat/stdbit`
+      to `CPPFLAGS`, falling back to FFmpeg's own shim at
+      `compat/stdbit/stdbit.h`. The wrapper compile uses Android.mk's
+      `LOCAL_C_INCLUDES = $(FFMPEG_INCLUDES)` which doesn't include
+      compat dirs, so the include fails.
+- **Fix:** install FFmpeg's stdbit.h shim directly at the include
+      root: `prebuilt/.../ffmpeg/include/stdbit.h`. Plain
+      `<stdbit.h>` then resolves to it. Done in all three platform
+      `ffmpeg.sh`.
+- **Why not patch the source:** wrapping the include in `#if
+      defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L`
+      would be a customization in vendored fftools, wiped each
+      upgrade. Install-the-shim survives.
+- **Future-proofing:** when the host toolchain supports C23 natively
+      (Xcode 16+ / NDK r27+ / GCC 13+), the shim becomes redundant
+      but doesn't conflict — it would just be unused since the system
+      `<stdbit.h>` (if it ships there) is found first via `-isystem`
+      search order. Safe to leave in indefinitely.
+- **Commit:** _set on commit_
 
 ### U9 — Stock fftools unconditionally `#include`s libpostproc; `--disable-postproc` breaks wrapper compile
 
