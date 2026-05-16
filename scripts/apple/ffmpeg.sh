@@ -625,6 +625,9 @@ create_temporary_framework "libavformat"
 create_temporary_framework "libavutil"
 create_temporary_framework "libswresample"
 create_temporary_framework "libswscale"
+# U9 follow-up: with --enable-postproc, libavfilter links -framework libpostproc.
+# The temporary framework wrapper must exist for the ld -framework lookup to succeed.
+create_temporary_framework "libpostproc"
 
 ${SED_INLINE} 's|$(SLIBNAME_WITH_MAJOR),|$(SLIBPREF)$(FULLNAME).framework/$(SLIBPREF)$(FULLNAME),|g' ${BASEDIR}/src/ffmpeg/ffbuild/config.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1
 ${SED_INLINE} 's|$(LD_LIB)|-framework lib% |g' ${BASEDIR}/src/ffmpeg/ffbuild/common.mak 1>>"${BASEDIR}"/build.log 2>&1 || return 1

@@ -593,6 +593,10 @@ the build scripts going forward.
         `libpostproc_neon` to both `LOCAL_SHARED_LIBRARIES` lines
       * `apple/configure.ac` — append `-framework libpostproc` to
         `FFMPEG_FRAMEWORKS`
+      * `apple/scripts/ffmpeg.sh` — call
+        `create_temporary_framework "libpostproc"` alongside the other
+        FFmpeg libs; without it, libavfilter's link step on iOS fails
+        with `ld: framework 'libpostproc' not found`
       * `linux/configure.ac` — append `-lpostproc` to `FFMPEG_LIBS`
 - **Commit:** _set on commit_
 
