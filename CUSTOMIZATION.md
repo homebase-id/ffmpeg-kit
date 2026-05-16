@@ -307,23 +307,43 @@ ffmpeg-kit checkout); they're one-time fixes that go into the build
 scripts and stay there. Future bumps will hit different ones in the
 same categories.
 
-**Pre-upgrade checklist** (run before dispatching CI on a fresh bump):
+**Pre-upgrade checklist** (run before dispatching CI on a fresh bump
+— each item maps to a U-entry below; apply proactively to save the
+~1-hour-per-fix CI iteration tax):
 
-1. Cross-check the headers `scripts/<platform>/ffmpeg.sh` copies from
-   `src/ffmpeg/` against the new FFmpeg's source tree. Drop any header
-   that no longer exists.
-2. Verify `--cpu=<X>` arguments still translate correctly to clang
-   `-march=<X>` — clang has tightened its CPU-name validation; spot
-   check by running `clang -march=$TARGET_CPU -c /dev/null -o /dev/null`
-   for each ABI you target.
-3. Check whether the arthenica mirror has the tags you want for every
-   external lib (the mirrors stopped getting tag pushes after the
-   project was archived in 2025). When in doubt: bump only ffmpeg,
-   leave external libs at last-known-good pins, then bump individual
-   libs one at a time with verified tag existence.
-4. If FFmpeg `fftools/` has gained new sources, they need adding to
-   each platform's build file (`Android.mk` / `Makefile.am`) — see C7
-   above for the prefix convention.
+1. **External library pins (U1).** Bump only `ffmpeg)` in
+   `scripts/source.sh`; leave every other library at the n6.0-era
+   pin. The `arthenica/*` mirrors stopped getting tag pushes in 2025
+   so most speculative bumps will 404. Bump individual libs later,
+   one at a time, after verifying the tag exists on the mirror.
+2. **Dropped fftools headers (U2 + U4).** Cross-check the header copy
+   list in `scripts/<platform>/ffmpeg.sh` (the `overwrite_file`
+   block under "MANUALLY ADD REQUIRED HEADERS") against the new
+   FFmpeg's source tree. Drop any header that no longer exists; add
+   any new fftools `.c` files to the per-platform build files
+   (`Android.mk`, `Makefile.am`).
+3. **clang `-march` for x86-64 (U3).** Confirm `TARGET_CPU="x86-64"`
+   (hyphenated) for the x86-64 block in all three platform
+   `ffmpeg.sh`. `TARGET_ARCH` stays underscored.
+4. **`AV_LOG_STDERR` (U5).** Should NOT appear in `fftools_ffmpeg.h`
+   or any wrapper file. If a fresh wrapper file references it,
+   delete the dead code rather than re-introducing the define.
+5. **`<string.h>` / `<cstring>` in wrappers (U6).** Verify all
+   wrapper sources that call `strlen`/`strcpy`/`memcpy` explicitly
+   include the header. Don't rely on transitive includes through
+   libav* headers.
+6. **`compat/va_copy.h` install (U7).** The build script must `mkdir
+   -p .../include/compat` and `overwrite_file ... compat/va_copy.h`
+   alongside the `mathops.h` block. Verify it's still there.
+7. **Wrapper CFLAGS (U8).** `MY_CFLAGS` in `android/jni/Android.mk`
+   must include `-Wno-parentheses -Wno-pointer-sign
+   -Wno-deprecated-declarations` to silence warnings stock fftools
+   code emits.
+8. **`--enable-postproc` (U9).** FFmpeg's configure must NOT have
+   `--disable-postproc` because stock fftools/ffprobe.c
+   unconditionally includes `libpostproc/postprocess.h`. With
+   `--enable-gpl` already set, postproc is the default — just ensure
+   nothing re-disables it.
 
 ## n6.0 → n7.1.3 fixes (2026-05)
 
@@ -380,6 +400,30 @@ the build scripts going forward.
       (underscored) — that's FFmpeg's internal arch name and what
       `--arch=` expects.
 - **Commit:** `253fe8b`
+
+### U9 — Stock fftools unconditionally `#include`s libpostproc; `--disable-postproc` breaks wrapper compile
+
+- [x] Fixed
+- **Symptom:** wrapper compile fails with:
+      ```
+      fftools_ffprobe.c:66:10: fatal error: 'libpostproc/postprocess.h' file not found
+      ```
+- **Root cause:** stock FFmpeg `fftools/ffprobe.c` unconditionally
+      includes `libpostproc/postprocess.h` and `libpostproc/version.h`
+      (used only to print the lib version in the banner). When
+      ffmpeg-kit's build passes `--disable-postproc` to FFmpeg's
+      configure, the libpostproc public headers are not installed —
+      then the wrapper compile that vendors `fftools_ffprobe.c` can't
+      resolve the include.
+- **Chosen fix:** drop `--disable-postproc` from the FFmpeg configure
+      invocation in all three platform `ffmpeg.sh` scripts. libpostproc
+      is small (~50 KB), GPL (already opted-in via `--enable-gpl`), and
+      stock-FFmpeg's default. chat-kmp doesn't *use* postproc but the
+      header needs to exist for the wrapper to build.
+- **Why not patch the source:** wrapping the include in `#if
+      CONFIG_POSTPROC` would be a customization in vendored fftools,
+      wiped each upgrade. Build-script change survives.
+- **Commit:** _set on commit_
 
 ### U8 — Wrapper CFLAGS need extra `-Wno-*` flags for stock fftools code
 
