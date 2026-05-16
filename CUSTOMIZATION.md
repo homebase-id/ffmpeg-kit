@@ -419,11 +419,16 @@ same categories.
    `parentheses`, `pointer-sign`, `deprecated-declarations`, the
    `unused-*` family). Stock fftools is warning-heavy; expect to add
    more if a new `-Werror,-W<x>` surfaces.
-8. **`--enable-postproc` (U9).** FFmpeg's configure must NOT have
-   `--disable-postproc` because stock fftools/ffprobe.c
-   unconditionally includes `libpostproc/postprocess.h`. With
-   `--enable-gpl` already set, postproc is the default — just ensure
-   nothing re-disables it.
+8. **`--enable-postproc` AND link `libpostproc` (U9).** FFmpeg's
+   configure must NOT have `--disable-postproc` (stock
+   fftools/ffprobe.c unconditionally includes
+   `libpostproc/postprocess.h` and calls `postproc_version()`).
+   With `--enable-gpl` already set, postproc is the default — just
+   ensure nothing re-disables it. **AND** the wrapper must link
+   against libpostproc in five places: Android `jni/ffmpeg/Android.mk`
+   + `jni/ffmpeg/neon/Android.mk` + `jni/Android.mk` (twice), plus
+   `apple/configure.ac` (`FFMPEG_FRAMEWORKS`) and
+   `linux/configure.ac` (`FFMPEG_LIBS`).
 9. **`<stdbit.h>` shim install (U10).** The build script must
    install FFmpeg's `compat/stdbit/stdbit.h` shim to
    `prebuilt/.../include/stdbit.h` so the wrapper compile can resolve
@@ -550,6 +555,21 @@ the build scripts going forward.
 - **Why not patch the source:** wrapping the include in `#if
       CONFIG_POSTPROC` would be a customization in vendored fftools,
       wiped each upgrade. Build-script change survives.
+- **Follow-up — link against libpostproc too.** Enabling postproc
+      solves the *compile*. The wrapper still needs to *link* against
+      `libpostproc.so` because ffprobe calls `postproc_version()` /
+      `postproc_configuration()` via the `SHOW_LIB_VERSION` macro
+      (banner output). Symptom:
+      `ld: error: undefined symbol: postproc_version`. Add it to the
+      link list in **five places**:
+      * `android/jni/ffmpeg/Android.mk` — add a `libpostproc` module
+        block (mirror libswscale's)
+      * `android/jni/ffmpeg/neon/Android.mk` — same, `libpostproc_neon`
+      * `android/jni/Android.mk` — append `libpostproc` and
+        `libpostproc_neon` to both `LOCAL_SHARED_LIBRARIES` lines
+      * `apple/configure.ac` — append `-framework libpostproc` to
+        `FFMPEG_FRAMEWORKS`
+      * `linux/configure.ac` — append `-lpostproc` to `FFMPEG_LIBS`
 - **Commit:** _set on commit_
 
 ### U8 — Wrapper CFLAGS need extra `-Wno-*` flags for stock fftools code

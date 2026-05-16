@@ -25,7 +25,7 @@ AX_CXX_COMPILE_STDCXX(11, noext)
 AM_PROG_AR
 CFLAGS="$cflags_bckup"
 
-FFMPEG_LIBS="-lavcodec -lavfilter -lavformat -lavutil -lswscale -lswresample"
+FFMPEG_LIBS="-lavcodec -lavfilter -lavformat -lavutil -lswscale -lswresample -lpostproc"
 AC_SUBST(FFMPEG_LIBS)
 
 # CURRENT INTERFACE:REVISION:AGE
