@@ -24,11 +24,12 @@ jobs:
         run: echo "export DEVELOPER_DIR=/Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer" > ~/.xcode.for.ffmpeg.kit.sh
       - name: run the build script
         # --disable-lib-libaom (U13) + --disable-lib-sdl (U14)
-        # + --disable-lib-libvpx (U17) + --disable-lib-libxml2 (U18):
-        # defensive. iOS doesn't currently enable these (no --full), but
-        # the constraints travel with the workflow if it ever switches to
-        # --full.
-        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --enable-gpl --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-libxml2 --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
+        # + --disable-lib-libvpx (U17): defensive. iOS doesn't currently
+        # enable these (no --full), but the constraints travel with the
+        # workflow if it ever switches to --full. libxml2 (U18) is an
+        # NDK-r27-Android-only collision; iOS uses Xcode toolchain and
+        # isn't affected.
+        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --enable-gpl --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *

@@ -37,7 +37,15 @@ jobs:
         run: |
           curl -s "https://dl.google.com/android/repository/android-ndk-${{ matrix.ndk-version }}.zip" -o ndk.zip
           unzip -q -o ndk.zip -d .ndk
-          echo "ANDROID_NDK_ROOT=$PWD/.ndk/$(ls .ndk)" >> $GITHUB_ENV
+          NDK_ROOT="$PWD/.ndk/$(ls .ndk)"
+          echo "ANDROID_NDK_ROOT=$NDK_ROOT" >> $GITHUB_ENV
+          # U18: NDK r27d ships a host x86_64 libxml2.so in its toolchain
+          # lib dir. FFmpeg's libxml2 link probe finds the host copy ahead
+          # of our cross-compiled one and fails with "incompatible with
+          # armelf_linux_eabi". Remove it — clang doesn't need it for
+          # cross-compile.
+          rm -f "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/lib/libxml2.so" \
+                "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/lib/libxml2.so."*
       - name: run the build script
         # --disable-lib-libaom: clang 18 (NDK r27d) rejects libaom 3.6.1's
         # missing forward declarations. chat-kmp doesn't use AV1 encoding.
@@ -49,12 +57,10 @@ jobs:
         # toolchain paths that NDK r27d removed. chat-kmp doesn't encode
         # VP9 (only decodes, which uses FFmpeg's native vp9 decoder).
         # See U17.
-        # --disable-lib-libxml2: NDK r27d ships a host libxml2.so in its
-        # toolchain lib dir; FFmpeg's libxml2 detection picks up the host
-        # one instead of our cross-compiled lib. chat-kmp uses HLS not
-        # DASH, so FFmpeg's libxml2 (only needed for DASH demuxer) is
-        # safe to drop. See U18.
-        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-libxml2 --disable-arm-v7a
+        # Note: libxml2 (U18) is handled at the NDK setup step above by
+        # removing the host libxml2.so that ships with NDK r27d. The
+        # cross-compiled libxml2 builds normally.
+        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-arm-v7a
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}

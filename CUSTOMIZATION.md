@@ -530,15 +530,29 @@ the build scripts going forward.
       cross-compiled one we built earlier, then fails because
       x86_64 is incompatible with arm32. Earlier NDK versions
       (r25b/r26) didn't ship libxml2 in their toolchain.
-- **Fix:** add `--disable-lib-libxml2`. FFmpeg's libxml2 dependency
-      is only used by the DASH demuxer (`libavformat/dashdec.c`).
-      chat-kmp uses HLS, not DASH, so libxml2 is dead weight anyway.
-- **Could we override the search path?** Yes — add an explicit
-      `-L<cross-libxml2-path>` early in LDFLAGS, or use
-      `--rpath-link`. More fragile and platform-specific. Disabling
-      is the cleaner answer given chat-kmp doesn't use the feature.
-- **Apple:** defensive `--disable-lib-libxml2` added to
-      build-ios.yml.
+- **First attempt (rejected):** add `--disable-lib-libxml2`. This
+      caused the build to **hang indefinitely** for reasons we
+      couldn't diagnose without live logs — possibly an FFmpeg
+      configure auto-detect loop, possibly some pkg-config retry
+      stuck on the missing lib. Two consecutive runs (#31, #32)
+      hung past 4 h on `run the build script` and had to be
+      cancelled. Reverted.
+- **Chosen fix:** remove the offending NDK host file in the
+      workflow's *NDK setup* step, BEFORE the build script runs:
+      ```yaml
+      rm -f "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/lib/libxml2.so" \
+            "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/lib/libxml2.so."*
+      ```
+      With the host copy gone, the linker only finds the
+      cross-compiled libxml2 we built ourselves, and the link probe
+      succeeds. libxml2 stays enabled in the build.
+- **Why this approach:** clang doesn't need libxml2 in its toolchain
+      lib dir for cross-compile — that file ships for some
+      host-side functionality (maybe `-fembed-bitcode` or some
+      compilation database integration). Removing it has no effect
+      on cross-compilation, and only one effect on host-side
+      tooling (which we don't use).
+- **Apple:** not affected (uses Xcode toolchain, not NDK).
 - **Commit:** _set on commit_
 
 ### U17 — libvpx 1.13.0 incompatible with NDK r27 (no gcc); disable it
