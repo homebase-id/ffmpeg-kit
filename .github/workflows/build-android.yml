@@ -49,7 +49,12 @@ jobs:
         # toolchain paths that NDK r27d removed. chat-kmp doesn't encode
         # VP9 (only decodes, which uses FFmpeg's native vp9 decoder).
         # See U17.
-        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-arm-v7a
+        # --disable-lib-libxml2: NDK r27d ships a host libxml2.so in its
+        # toolchain lib dir; FFmpeg's libxml2 detection picks up the host
+        # one instead of our cross-compiled lib. chat-kmp uses HLS not
+        # DASH, so FFmpeg's libxml2 (only needed for DASH demuxer) is
+        # safe to drop. See U18.
+        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-libxml2 --disable-arm-v7a
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}

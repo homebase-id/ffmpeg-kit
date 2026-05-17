@@ -510,6 +510,37 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U18 — NDK r27 ships host libxml2.so; collides with cross-compiled — disable libxml2
+
+- [x] Fixed
+- **Symptom:** Android run #30 (NDK r27d, all libs OK including
+      gnutls/libuuid/etc.) hit a FFmpeg link failure at
+      configure-time:
+      ```
+      ld.lld: error: /home/runner/work/ffmpeg-kit/ffmpeg-kit/.ndk/
+        android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/lib/
+        libxml2.so is incompatible with armelf_linux_eabi
+      clang: error: linker command failed with exit code 1
+      ```
+- **Root cause:** NDK r27d started shipping a `libxml2.so` in its
+      own toolchain `lib/` directory (host x86_64, used by clang
+      internals). That path is on the default library search list of
+      the bundled clang. When FFmpeg's configure runs `test_ld -lxml2`
+      to detect libxml2, the linker grabs the **host** copy before the
+      cross-compiled one we built earlier, then fails because
+      x86_64 is incompatible with arm32. Earlier NDK versions
+      (r25b/r26) didn't ship libxml2 in their toolchain.
+- **Fix:** add `--disable-lib-libxml2`. FFmpeg's libxml2 dependency
+      is only used by the DASH demuxer (`libavformat/dashdec.c`).
+      chat-kmp uses HLS, not DASH, so libxml2 is dead weight anyway.
+- **Could we override the search path?** Yes — add an explicit
+      `-L<cross-libxml2-path>` early in LDFLAGS, or use
+      `--rpath-link`. More fragile and platform-specific. Disabling
+      is the cleaner answer given chat-kmp doesn't use the feature.
+- **Apple:** defensive `--disable-lib-libxml2` added to
+      build-ios.yml.
+- **Commit:** _set on commit_
+
 ### U17 — libvpx 1.13.0 incompatible with NDK r27 (no gcc); disable it
 
 - [x] Fixed
