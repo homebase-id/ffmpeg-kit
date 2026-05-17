@@ -445,6 +445,11 @@ same categories.
     and so is wiped by `replay.sh` each cycle. The C10 section below
     has the exact text to apply; the n6.0 baseline tag is the
     authoritative reference.
+11. **NDK r27+ for 16 KB page alignment (U12).** `build-android.yml`
+    and `periodic-builds-android.yml` matrices must pin `r27d-linux`
+    or newer. Older NDKs produce `.so` files with 4 KB-aligned LOAD
+    segments which Android 15+ on 16 KB-page devices refuses to load.
+    Google Play requires this for app updates as of Nov 1, 2025.
 
 ## n6.0 → n7.1.3 fixes (2026-05)
 
@@ -504,6 +509,46 @@ the build scripts going forward.
       separate `case` arm and bit me on iOS run #23 after I'd fixed
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
+
+### U12 — NDK r27+ required for 16 KB page size alignment (Android 15+)
+
+- [x] Fixed
+- **Symptom:** Android Studio refuses to install the APK on a
+      Pixel-9 / Android-15+ emulator (or any 16 KB-page device):
+      ```
+      APK is not compatible with 16 KB devices. Some libraries have
+      LOAD segments not aligned at 16 KB boundaries:
+        lib/x86_64/libavcodec.so   ... libffmpegkit.so ...
+      ```
+- **Root cause:** Android 15+ on the latest hardware uses 16 KB
+      memory pages. ELF `.so` files built with older NDKs have LOAD
+      segments at 4 KB boundaries and can't be `mmap`-loaded on
+      16 KB-page devices. NDK r25b ships clang 14 + the 4 KB default.
+      Starting **Nov 1, 2025**, Google Play requires 16 KB
+      compatibility for app updates targeting Android 15+.
+- **Fix:** bump NDK to r27d in `build-android.yml` and
+      `periodic-builds-android.yml`. NDK r27+ defaults to
+      `-Wl,-z,max-page-size=16384` for ndk-build (which is what
+      ffmpeg-kit's Android.mk uses), so all .so files (FFmpeg's
+      libav*, libpostproc, our libffmpegkit, plus libc++_shared
+      bundled from the NDK) automatically get 16 KB-aligned LOAD
+      segments.
+- **Side benefit:** r27 ships clang 18, which has native C23
+      `<stdbit.h>`. Our U10 install-the-shim fix becomes redundant
+      but harmless — the toolchain's own header is found first via
+      `-isystem` and our shim is shadowed silently.
+- **Side risk:** new clang version may surface fresh warnings or
+      reject things older clang accepted. Be ready for one more
+      whack-a-mole cycle of `-Wno-*` flag additions to `MY_CFLAGS`
+      (see U8).
+- **Alternative path** (not taken): stay on r25b and add
+      `-Wl,-z,max-page-size=16384` explicitly to every external
+      library's LDFLAGS plus FFmpeg's `--extra-ldflags` plus
+      Android.mk's `LOCAL_LDFLAGS`. ~25 places to touch. Bumping the
+      NDK is one line.
+- **Reference fork:** `JamaisMagic/ffmpeg-kit-16KB` does exactly
+      this NDK bump (still on FFmpeg n6.0).
+- **Commit:** _set on commit_
 
 ### U11 — Bump GitHub Actions to Node 24-native versions
 

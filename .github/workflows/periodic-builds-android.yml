@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r25b-linux', 'r26d-linux' ]
+        ndk-version: [ 'r27d-linux' ]
         branches: [ 'main', 'development' ]
     defaults:
       run:
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r25b-linux' ]
+        ndk-version: [ 'r27d-linux' ]
         branches: [ 'main', 'development' ]
     defaults:
       run:

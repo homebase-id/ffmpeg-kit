@@ -12,7 +12,9 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        ndk-version: [ 'r25b-linux' ]
+        # NDK r27+ defaults to 16KB ELF page-size alignment, required by
+        # Android 15+ on 16KB-page devices. See U12 in CUSTOMIZATION.md.
+        ndk-version: [ 'r27d-linux' ]
     defaults:
       run:
         shell: bash
