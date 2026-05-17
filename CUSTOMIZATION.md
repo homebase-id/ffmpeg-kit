@@ -510,6 +510,35 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U17 — libvpx 1.13.0 incompatible with NDK r27 (no gcc); disable it
+
+- [x] Fixed
+- **Symptom:** Android run #29 (NDK r27d, libaom/SDL disabled,
+      libuuid/gnutls CFLAGS relaxed) failed compiling libvpx:
+      ```
+      Configuring for target 'armv7-android-gcc'
+        enabling armv7 / neon / neon_asm
+      Assuming standalone build with NDK toolchain.
+      Toolchain is unable to link executables
+      Configuration failed.
+      ```
+- **Root cause:** libvpx 1.13.0's configure has hardcoded
+      assumptions about NDK toolchain paths that include gcc
+      wrappers. NDK r27 removed gcc entirely (clang-only). libvpx's
+      link-test then can't find `arm-linux-androideabi-gcc` etc.
+      and reports "Toolchain is unable to link executables". libvpx
+      1.14+ added NDK r27 awareness.
+- **Fix:** add `--disable-lib-libvpx` to the workflow. chat-kmp
+      doesn't encode VP9 (uses libx264 for H.264 only). FFmpeg's
+      native VP9 decoder in libavcodec covers any VP9 source video
+      without needing libvpx.
+- **Could we bump libvpx?** Yes — but the arthenica/libvpx mirror
+      probably doesn't have 1.14+ (U1 lesson), and dropping it is
+      consistent with B3 (size trim) anyway.
+- **Apple:** defensive `--disable-lib-libvpx` added to build-ios.yml
+      for consistency, same as U13/U14.
+- **Commit:** _set on commit_
+
 ### U16 — gnutls 3.7.9's bundled gnulib fails clang-18 strictness
 
 - [x] Fixed

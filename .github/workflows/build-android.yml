@@ -43,9 +43,13 @@ jobs:
         # missing forward declarations. chat-kmp doesn't use AV1 encoding.
         # See U13 in CUSTOMIZATION.md.
         # --disable-lib-sdl: clang 18 rejects SDL 2.0.8's OpenGLES2
-        # incompatible function pointer types. chat-kmp doesn't use SDL
-        # (only needed for ffplay/SDL audio-video filters). See U14.
-        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-arm-v7a
+        # incompatible function pointer types. chat-kmp doesn't use SDL.
+        # See U14.
+        # --disable-lib-libvpx: libvpx 1.13.0's configure assumes gcc
+        # toolchain paths that NDK r27d removed. chat-kmp doesn't encode
+        # VP9 (only decodes, which uses FFmpeg's native vp9 decoder).
+        # See U17.
+        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-arm-v7a
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}
