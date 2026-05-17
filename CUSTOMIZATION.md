@@ -510,6 +510,35 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U15 — libuuid 1.0.3 missing `<sys/file.h>` include; relax warning
+
+- [x] Fixed
+- **Symptom:** Android run #27 (NDK r27d, libaom+SDL disabled) failed
+      compiling libuuid:
+      ```
+      gen_uuid.c:297:10: error: call to undeclared function 'flock';
+        ISO C99 and later do not support implicit function declarations
+        [-Wimplicit-function-declaration]
+      ```
+- **Root cause:** libuuid 1.0.3's `gen_uuid.c` calls `flock()` but
+      doesn't `#include <sys/file.h>`. Clang 14 warned silently;
+      clang 18 promotes to error per ISO C99.
+- **Fix:** add `-Wno-implicit-function-declaration` to libuuid's
+      build CFLAGS in `scripts/android/libuuid.sh`. `flock()` is
+      available in Android bionic libc, so the implicit-decl is
+      semantically harmless — the library has just been getting away
+      with sloppy includes for years.
+- **Why not disable libuuid:** it's a transitive dep of fontconfig
+      → libass → subtitle burn-in. chat-kmp doesn't *use* subtitle
+      burn-in today, but disabling libuuid would cascade-break
+      fontconfig + libass which other consumers might want. Surgical
+      CFLAGS fix preserves the dependency chain.
+- **Apple/Linux:** scripts/apple/libuuid.sh and scripts/linux/libuuid.sh
+      may need the same fix if they ever hit the same clang version.
+      Not patched preemptively because Apple/Linux builds use system
+      clang (host toolchain), which may or may not be clang 18+.
+- **Commit:** _set on commit_
+
 ### U14 — SDL 2.0.8 incompatible with clang 18; disable it
 
 - [x] Fixed

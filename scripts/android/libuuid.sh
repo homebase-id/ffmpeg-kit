@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# U15: libuuid 1.0.3's gen_uuid.c calls flock() without including <sys/file.h>.
+# Clang 14 (NDK r25b) silently allowed implicit declarations; clang 18
+# (NDK r27d) errors out per ISO C99 (-Wimplicit-function-declaration).
+# Suppress for libuuid only — flock() really is available in Android's
+# bionic libc, the source just forgot the include.
+export CFLAGS=$(get_cflags "${LIB_NAME}")" -Wno-implicit-function-declaration"
+
 # ALWAYS CLEAN THE PREVIOUS BUILD
 make distclean 2>/dev/null 1>/dev/null
 
