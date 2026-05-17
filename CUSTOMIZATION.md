@@ -615,7 +615,12 @@ the build scripts going forward.
 - **Side risk:** new clang version may surface fresh warnings or
       reject things older clang accepted. Be ready for one more
       whack-a-mole cycle of `-Wno-*` flag additions to `MY_CFLAGS`
-      (see U8).
+      (see U8), AND for older library pins to break under stricter
+      clang (see U13/U14).
+- **Belt-and-suspenders:** `android/jni/Application.mk` adds
+      `APP_LDFLAGS += -Wl,-z,max-page-size=16384` explicitly. Redundant
+      with NDK r27+ defaults today, but protects against any future
+      NDK downgrade or default change.
 - **Alternative path** (not taken): stay on r25b and add
       `-Wl,-z,max-page-size=16384` explicitly to every external
       library's LDFLAGS plus FFmpeg's `--extra-ldflags` plus
