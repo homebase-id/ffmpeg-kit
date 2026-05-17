@@ -510,6 +510,45 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U13 — libaom 3.6.1 incompatible with clang 18 (NDK r27+); disable it
+
+- [x] Fixed
+- **Symptom:** Android run #25 with NDK r27d failed at libaom compile:
+      ```
+      libaom/aom_dsp/arm/subpel_variance_neon.c:220:1: error: call to
+        undeclared function 'aom_variance16x16_neon'; ISO C99 and later
+        do not support implicit function declarations
+        [-Wimplicit-function-declaration]
+      fatal error: too many errors emitted, stopping now
+      ```
+- **Root cause:** libaom 3.6.1's NEON intrinsics source has missing
+      forward declarations. Clang 14 (NDK r25b) warned and kept
+      going; clang 18 (NDK r27+, U12) treats implicit declarations
+      as a hard ISO-C99 error. libaom 3.8+ fixed the declarations,
+      but the `arthenica/libaom` mirror doesn't carry that tag (per
+      U1 — mirror stale after the project archived).
+- **Fix:** add `--disable-lib-libaom` to the `./android.sh`
+      invocation in `.github/workflows/build-android.yml`. chat-kmp
+      doesn't use AV1 *encoding* (only H.264; dav1d still provides
+      AV1 *decoding* if any consumer needs that). Dropping libaom
+      saves ~3-5 MB and avoids the clang-18 incompatibility.
+- **Could we instead bump libaom?** Yes — switch the libaom
+      SOURCE_REPO_URL in `scripts/source.sh` from `arthenica/libaom`
+      to the canonical upstream (`code.videolan.org` mirror or
+      similar) and pin v3.8.0+. Skipped because: (a) chat-kmp
+      doesn't need AV1 encoding, (b) we'd be removing libaom in B3
+      anyway, (c) Option U1 specifically warns against speculative
+      lib bumps.
+- **Apple/Linux note:** the same incompatibility exists in
+      `build-ios.yml` and any linux build, *if* they enable libaom
+      under clang 18. Current `build-ios.yml` doesn't enable libaom
+      (its flags are `--enable-gpl --enable-ios-zlib --enable-openssl
+      --enable-zimg --enable-x264`), so iOS is technically unaffected
+      today. `--disable-lib-libaom` is **defensively added to
+      build-ios.yml** anyway so the constraint travels with the
+      workflow if iOS ever switches to `--full`.
+- **Commit:** _set on commit_
+
 ### U12 — NDK r27+ required for 16 KB page size alignment (Android 15+)
 
 - [x] Fixed

@@ -39,7 +39,11 @@ jobs:
           unzip -q -o ndk.zip -d .ndk
           echo "ANDROID_NDK_ROOT=$PWD/.ndk/$(ls .ndk)" >> $GITHUB_ENV
       - name: run the build script
-        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-arm-v7a
+        # --disable-lib-libaom: libaom 3.6.1 has missing forward declarations
+        # that clang 18 (NDK r27d) rejects per ISO C99. chat-kmp doesn't use
+        # AV1 encoding (only H.264), so dropping it is free. See U13 in
+        # CUSTOMIZATION.md.
+        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-arm-v7a
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}

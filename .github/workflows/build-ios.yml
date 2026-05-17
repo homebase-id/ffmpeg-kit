@@ -23,7 +23,10 @@ jobs:
       - name: set up xcode
         run: echo "export DEVELOPER_DIR=/Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer" > ~/.xcode.for.ffmpeg.kit.sh
       - name: run the build script
-        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --enable-gpl --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
+        # --disable-lib-libaom defensive: see U13 in CUSTOMIZATION.md. iOS
+        # doesn't currently enable libaom (no --full), but if it ever does
+        # this constraint travels with the workflow.
+        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --enable-gpl --disable-lib-libaom --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *
