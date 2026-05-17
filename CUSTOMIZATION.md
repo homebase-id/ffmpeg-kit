@@ -510,6 +510,35 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U16 — gnutls 3.7.9's bundled gnulib fails clang-18 strictness
+
+- [x] Fixed
+- **Symptom:** Android run #28 (NDK r27d, libaom+SDL disabled,
+      libuuid relaxed) failed compiling gnutls:
+      ```
+      parse-datetime.y:2026: error: call to undeclared function 'mktime_z'
+      parse-datetime.y:2047: error: call to undeclared function 'tzalloc';
+        ... incompatible integer to pointer conversion initializing
+        'timezone_t' with an expression of type 'int'
+      parse-datetime.y:2064: error: call to undeclared function 'tzfree'
+      ```
+- **Root cause:** gnutls 3.7.9 bundles a copy of `gnulib` whose
+      `parse-datetime.y` uses `tzfree`/`tzalloc`/`mktime_z`. These
+      functions exist in Android bionic since API 26, but gnulib's
+      autoconf feature-detection doesn't recognize bionic, so it
+      forgets to include the right header. Result: clang 18 sees
+      implicit declarations + an int-to-pointer conversion (because
+      the implicit-declared `tzalloc` is assumed `int(...)` not
+      `timezone_t(...)`).
+- **Fix:** add `-Wno-implicit-function-declaration -Wno-int-conversion`
+      to gnutls's build CFLAGS in `scripts/android/gnutls.sh`.
+      Runtime-safe: gnulib falls back to the legacy `tzset`-based
+      timezone path on platforms where the new functions are absent.
+- **Same-family:** see U15 (libuuid). The "old library, sloppy
+      includes, clang 18 strict" pattern is recurring. Expect more
+      cycles.
+- **Commit:** _set on commit_
+
 ### U15 — libuuid 1.0.3 missing `<sys/file.h>` include; relax warning
 
 - [x] Fixed
