@@ -496,10 +496,13 @@ the build scripts going forward.
       straight through to clang as `-march=$TARGET_CPU` without the
       n6.0-era internal remap from `x86_64` → `x86-64`. Modern clang
       (NDK r25+, recent Xcode toolchains) is strict about the hyphen.
-- **Fix:** set `TARGET_CPU="x86-64"` (hyphenated) for the x86-64 ABI
-      in all three platform scripts. `TARGET_ARCH` stays `x86_64`
-      (underscored) — that's FFmpeg's internal arch name and what
-      `--arch=` expects.
+- **Fix:** set `TARGET_CPU="x86-64"` (hyphenated) for **every**
+      x86-related ABI in all three platform scripts. `TARGET_ARCH`
+      stays `x86_64` (underscored) — that's FFmpeg's internal arch
+      name and what `--arch=` expects. **Don't miss the
+      `x86-64-mac-catalyst` block in `apple/ffmpeg.sh`** — it's a
+      separate `case` arm and bit me on iOS run #23 after I'd fixed
+      the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
 ### U11 — Bump GitHub Actions to Node 24-native versions

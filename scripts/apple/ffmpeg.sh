@@ -94,7 +94,8 @@ x86-64)
   BITCODE_FLAGS=""
   ;;
 x86-64-mac-catalyst)
-  TARGET_CPU="x86_64"
+  # See x86-64 block above re: hyphenated TARGET_CPU for clang -march.
+  TARGET_CPU="x86-64"
   TARGET_ARCH="x86_64"
   ASM_OPTIONS=" --disable-neon --disable-asm"
   BITCODE_FLAGS="-fembed-bitcode -Wc,-fembed-bitcode"
