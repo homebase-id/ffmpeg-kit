@@ -617,10 +617,12 @@ the build scripts going forward.
       whack-a-mole cycle of `-Wno-*` flag additions to `MY_CFLAGS`
       (see U8), AND for older library pins to break under stricter
       clang (see U13/U14).
-- **Belt-and-suspenders:** `android/jni/Application.mk` adds
-      `APP_LDFLAGS += -Wl,-z,max-page-size=16384` explicitly. Redundant
-      with NDK r27+ defaults today, but protects against any future
-      NDK downgrade or default change.
+- **Belt-and-suspenders:** `scripts/function-android.sh` generates
+      `android/jni/Application.mk` at build time (the static file is
+      gitignored). The generated `APP_LDFLAGS` now includes
+      `-Wl,-z,max-page-size=16384` explicitly. Redundant with NDK r27+
+      defaults today, but protects against any future NDK downgrade or
+      default change.
 - **Alternative path** (not taken): stay on r25b and add
       `-Wl,-z,max-page-size=16384` explicitly to every external
       library's LDFLAGS plus FFmpeg's `--extra-ldflags` plus
