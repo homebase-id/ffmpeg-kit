@@ -510,6 +510,42 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U14 — SDL 2.0.8 incompatible with clang 18; disable it
+
+- [x] Fixed
+- **Symptom:** Android run #26 (NDK r27d + libaom disabled) failed
+      compiling SDL:
+      ```
+      src/sdl/src/render/opengles2/SDL_gles2funcs.h:58: error: incompatible
+        function pointer types assigning to 'void (*)(GLuint, GLsizei,
+        const GLchar **, const GLint *)' from 'void (GLuint, GLsizei,
+        const GLchar *const *, const GLint *)'
+        [-Wincompatible-function-pointer-types]
+      ```
+- **Root cause:** clang 18 tightened function-pointer-type matching
+      and now rejects `const char *const *` vs `const char **`
+      mismatches that clang 14 accepted. SDL 2.0.8 (release-2.0.8 in
+      arthenica/SDL) has the mismatch in its OpenGLES2 wrapper. SDL
+      2.0.10+ fixed it, but again the arthenica mirror likely doesn't
+      carry newer tags.
+- **Fix:** add `--disable-lib-sdl` to the `./android.sh` and
+      `./ios.sh` invocations. chat-kmp doesn't use SDL — it's only
+      needed for FFmpeg's `ffplay` tool (which we don't build) and
+      SDL-based audio/video output filters (which chat-kmp doesn't
+      use).
+- **Could we instead bump SDL or add `-Wno-*`?**
+      * Bump: arthenica mirror staleness risk (per U1); also SDL 2.x
+        major bump would be more disruptive.
+      * `-Wno-incompatible-function-pointer-types`: would work but
+        needs to be added to SDL's build CFLAGS specifically
+        (`scripts/android/sdl.sh`) since MY_CFLAGS doesn't reach
+        third-party lib builds. More plumbing.
+      * Disable: chat-kmp doesn't need SDL anyway. Smaller binary.
+        Aligns with B3 (size trim). Trivially reversible if needed.
+- **Apple/iOS:** same defensive add as U13 — iOS doesn't currently
+      enable SDL but the constraint travels with the workflow.
+- **Commit:** _set on commit_
+
 ### U13 — libaom 3.6.1 incompatible with clang 18 (NDK r27+); disable it
 
 - [x] Fixed
