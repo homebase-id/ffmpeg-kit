@@ -21,6 +21,7 @@ libffmpegkit_la_SOURCES = \
     Statistics.m \
     StreamInformation.m \
     ffmpegkit_exception.m \
+    ffmpegkit_resources.c \
     fftools_cmdutils.c \
     fftools_ffmpeg.c \
     fftools_ffmpeg_dec.c \
