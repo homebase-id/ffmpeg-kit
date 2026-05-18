@@ -49,8 +49,6 @@ LOCAL_MODULE := libswscale
 LOCAL_SRC_FILES := libswscale.so
 include $(PREBUILT_SHARED_LIBRARY)
 
-include $(CLEAR_VARS)
-LOCAL_ARM_MODE := $(MY_ARM_MODE)
-LOCAL_MODULE := libpostproc
-LOCAL_SRC_FILES := libpostproc.so
-include $(PREBUILT_SHARED_LIBRARY)
+# U20 (n8): libpostproc removed from FFmpeg 8.x mainline. The module block
+# that was here (U9 follow-up) is gone; postproc.so is no longer emitted by
+# FFmpeg n8's build, so ndk-build can't find it.

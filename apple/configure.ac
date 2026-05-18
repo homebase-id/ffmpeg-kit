@@ -24,7 +24,7 @@ AM_PROG_AR
 AC_PROG_OBJC
 CFLAGS="$cflags_bckup"
 
-FFMPEG_FRAMEWORKS="-framework libavcodec -framework libavfilter -framework libavformat -framework libavutil -framework libswscale -framework libswresample -framework libpostproc"
+FFMPEG_FRAMEWORKS="-framework libavcodec -framework libavfilter -framework libavformat -framework libavutil -framework libswscale -framework libswresample"
 AC_SUBST(FFMPEG_FRAMEWORKS)
 
 LT_INIT

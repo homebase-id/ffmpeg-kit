@@ -90,7 +90,7 @@ ifeq ($(MY_ARMV7_NEON), true)
     LOCAL_SRC_FILES := $(MY_SRC_FILES)
     LOCAL_CFLAGS := $(MY_CFLAGS)
     LOCAL_LDLIBS := $(MY_LDLIBS)
-    LOCAL_SHARED_LIBRARIES := libavcodec_neon libavfilter_neon libswscale_neon libavformat_neon libavutil_neon libswresample_neon libavdevice_neon libpostproc_neon
+    LOCAL_SHARED_LIBRARIES := libavcodec_neon libavfilter_neon libswscale_neon libavformat_neon libavutil_neon libswresample_neon libavdevice_neon
     # U19: NDK r27 dropped the implicit `c++_shared` ndk-build module.
     # libc++_shared.so is now packaged automatically when Application.mk
     # sets APP_STL := c++_shared (which it does, see function-android.sh).
@@ -114,7 +114,7 @@ ifeq ($(MY_BUILD_GENERIC_FFMPEG_KIT), true)
     LOCAL_SRC_FILES := $(MY_SRC_FILES)
     LOCAL_CFLAGS := $(MY_CFLAGS)
     LOCAL_LDLIBS := $(MY_LDLIBS)
-    LOCAL_SHARED_LIBRARIES := libavfilter libavformat libavcodec libavutil libswresample libavdevice libswscale libpostproc
+    LOCAL_SHARED_LIBRARIES := libavfilter libavformat libavcodec libavutil libswresample libavdevice libswscale
     # U19: NDK r27 dropped the implicit `c++_shared` ndk-build module.
     # libc++_shared.so is now packaged automatically when Application.mk
     # sets APP_STL := c++_shared (which it does, see function-android.sh).
