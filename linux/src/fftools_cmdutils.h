@@ -36,13 +36,21 @@
 
 /**
  * program name, defined by the program for show_version().
+ *
+ * Homebase ffmpeg-kit C10: stock declares this as a `const char []` defined
+ * once per standalone tool (ffmpeg, ffprobe). Because ffmpeg-kit links both
+ * tools into a single .so, both definitions would collide at link time. We
+ * change it to a mutable thread-local pointer; `ffmpeg_execute()` and
+ * `ffprobe_execute()` each set it to their own value at entry.
  */
-extern const char program_name[];
+extern __thread char *program_name;
 
 /**
  * program birth year, defined by the program for show_banner()
+ *
+ * Homebase ffmpeg-kit C10: see program_name above for rationale.
  */
-extern const int program_birth_year;
+extern __thread int program_birth_year;
 
 extern AVDictionary *sws_dict;
 extern AVDictionary *swr_opts;

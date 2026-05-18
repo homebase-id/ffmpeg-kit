@@ -68,6 +68,16 @@
 #include "fftools_cmdutils.h"
 #include "fftools_opt_common.h"
 
+/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.1.
+ * See CUSTOMIZATION.md at the repo root.
+ *
+ *   C1 — main() renamed ffprobe_execute()
+ *   C2 — body wrapped in setjmp(ex_buf__); fatal errors longjmp via
+ *        exit_program() instead of calling exit()
+ *   C6 — setvbuf(stderr) call removed
+ */
+#include "ffmpegkit_exception.h"
+
 #include "libavutil/thread.h"
 
 // attached as opaque_ref to packets/frames
@@ -89,8 +99,9 @@ typedef struct InputFile {
     int       nb_streams;
 } InputFile;
 
-const char program_name[] = "ffprobe";
-const int program_birth_year = 2007;
+/* C10: program_name / program_birth_year are mutable thread-locals defined in
+ * fftools_cmdutils.c, set at the top of ffprobe_execute() below. See
+ * CUSTOMIZATION.md C10 for rationale. */
 
 static int do_analyze_frames = 0;
 static int do_bitexact = 0;
@@ -2480,7 +2491,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
 
     ifile->streams = av_calloc(fmt_ctx->nb_streams, sizeof(*ifile->streams));
     if (!ifile->streams)
-        exit(1);
+        exit_program(1); /* C2: longjmps to ffprobe_execute */
     ifile->nb_streams = fmt_ctx->nb_streams;
 
     /* bind a decoder to each input stream */
@@ -2501,15 +2512,15 @@ static int open_input_file(InputFile *ifile, const char *filename,
             err = filter_codec_opts(codec_opts, stream->codecpar->codec_id,
                                     fmt_ctx, stream, codec, &opts, NULL);
             if (err < 0)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             ist->dec_ctx = avcodec_alloc_context3(codec);
             if (!ist->dec_ctx)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             err = avcodec_parameters_to_context(ist->dec_ctx, stream->codecpar);
             if (err < 0)
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
 
             if (do_show_log) {
                 // For logging it is needed to disable at least frame threads as otherwise
@@ -2525,7 +2536,7 @@ static int open_input_file(InputFile *ifile, const char *filename,
             if (avcodec_open2(ist->dec_ctx, codec, &opts) < 0) {
                 av_log(NULL, AV_LOG_WARNING, "Could not open codec for input stream %d\n",
                        stream->index);
-                exit(1);
+                exit_program(1); /* C2: longjmps to ffprobe_execute */
             }
 
             if ((t = av_dict_iterate(opts, NULL))) {
@@ -2909,7 +2920,11 @@ static int opt_print_filename(void *optctx, const char *opt, const char *arg)
     return print_input_filename ? 0 : AVERROR(ENOMEM);
 }
 
-void show_help_default(const char *opt, const char *arg)
+/* C10: stock declares this as `void show_help_default` — same name as the
+ * ffmpeg version in fftools_ffmpeg_opt.c, which collides at link time.
+ * Renamed to avoid the conflict. The shared opt_common.c show_help() routes
+ * default help to ffmpeg's version (chat-kmp doesn't exercise ffprobe -h). */
+void show_help_default_ffprobe(const char *opt, const char *arg)
 {
     av_log_set_callback(log_callback_help);
     show_usage();
@@ -3230,7 +3245,9 @@ static inline int check_section_show_entries(int section_id)
             do_show_##varname = 1;                                      \
     } while (0)
 
-int main(int argc, char **argv)
+/* C1 — entry point: main() renamed to ffprobe_execute() so the wrapper
+ * layer can invoke ffprobe as a callable function. */
+int ffprobe_execute(int argc, char **argv)
 {
     const AVTextFormatter *f;
     AVTextFormatContext *tctx;
@@ -3240,9 +3257,20 @@ int main(int argc, char **argv)
     int ret, input_ret;
     AVTextFormatDataDump data_dump_format_id = AV_TEXTFORMAT_DATADUMP_XXD;
 
+    /* C2 — catch exit_program() from anywhere deeper in the stack. */
+    if (setjmp(ex_buf__) != 0) {
+        return longjmp_value;
+    }
+
+    /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
+    static char _program_name[] = "ffprobe";
+    program_name = _program_name;
+    program_birth_year = 2007;
+
     init_dynload();
 
-    setvbuf(stderr, NULL, _IONBF, 0); /* win32 runtime needs this */
+    /* C6 — setvbuf(stderr) removed; Win32-only requirement, stomped on
+     * the host process's stderr handling on Android/iOS. */
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
 

@@ -59,6 +59,13 @@ AVDictionary *format_opts, *codec_opts;
 
 int hide_banner = 0;
 
+/* Homebase ffmpeg-kit C10: program_name and program_birth_year are stock-defined
+ * once per standalone tool. We linkage-merge ffmpeg + ffprobe into one .so, so
+ * the definitions live here as mutable thread-locals; each *_execute() entry
+ * sets its own values. See fftools_cmdutils.h C10 comment. */
+__thread char *program_name = NULL;
+__thread int program_birth_year = 0;
+
 void uninit_opts(void)
 {
     av_dict_free(&swr_opts);
