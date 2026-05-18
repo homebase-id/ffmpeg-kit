@@ -91,9 +91,11 @@ ifeq ($(MY_ARMV7_NEON), true)
     LOCAL_CFLAGS := $(MY_CFLAGS)
     LOCAL_LDLIBS := $(MY_LDLIBS)
     LOCAL_SHARED_LIBRARIES := libavcodec_neon libavfilter_neon libswscale_neon libavformat_neon libavutil_neon libswresample_neon libavdevice_neon libpostproc_neon
-    ifeq ($(APP_STL), c++_shared)
-        LOCAL_SHARED_LIBRARIES += c++_shared # otherwise NDK will not add the library for packaging
-    endif
+    # U19: NDK r27 dropped the implicit `c++_shared` ndk-build module.
+    # libc++_shared.so is now packaged automatically when Application.mk
+    # sets APP_STL := c++_shared (which it does, see function-android.sh).
+    # Explicit `LOCAL_SHARED_LIBRARIES += c++_shared` now fails with
+    # "Module ... depends on undefined modules: c++_shared".
     LOCAL_ARM_NEON := true
     include $(BUILD_SHARED_LIBRARY)
 
@@ -113,9 +115,11 @@ ifeq ($(MY_BUILD_GENERIC_FFMPEG_KIT), true)
     LOCAL_CFLAGS := $(MY_CFLAGS)
     LOCAL_LDLIBS := $(MY_LDLIBS)
     LOCAL_SHARED_LIBRARIES := libavfilter libavformat libavcodec libavutil libswresample libavdevice libswscale libpostproc
-    ifeq ($(APP_STL), c++_shared)
-        LOCAL_SHARED_LIBRARIES += c++_shared # otherwise NDK will not add the library for packaging
-    endif
+    # U19: NDK r27 dropped the implicit `c++_shared` ndk-build module.
+    # libc++_shared.so is now packaged automatically when Application.mk
+    # sets APP_STL := c++_shared (which it does, see function-android.sh).
+    # Explicit `LOCAL_SHARED_LIBRARIES += c++_shared` now fails with
+    # "Module ... depends on undefined modules: c++_shared".
     LOCAL_ARM_NEON := ${MY_ARM_NEON}
     include $(BUILD_SHARED_LIBRARY)
 

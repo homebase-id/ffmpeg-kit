@@ -510,6 +510,38 @@ the build scripts going forward.
       the plain `x86-64)` arm.
 - **Commit:** `253fe8b`
 
+### U19 — NDK r27 dropped the implicit `c++_shared` ndk-build module
+
+- [x] Fixed
+- **Symptom:** Android run #33 — every library + FFmpeg compiled
+      green; failed at the wrapper (`ffmpeg-kit: failed`) with:
+      ```
+      Android NDK: Module ffmpegkit_armv7a_neon depends on undefined
+        modules: c++_shared
+      *** Android NDK: Note that old versions of ndk-build silently
+        ignored this error case. ... Stop.
+      ```
+- **Root cause:** `android/jni/Android.mk` had two blocks like:
+      ```
+      ifeq ($(APP_STL), c++_shared)
+          LOCAL_SHARED_LIBRARIES += c++_shared  # ...for packaging
+      endif
+      ```
+      Older NDKs exposed `c++_shared` as a referenceable ndk-build
+      module. NDK r27 removed this convention because the C++ runtime
+      now packages automatically when `Application.mk` sets `APP_STL
+      := c++_shared` (which our generated Application.mk does).
+- **Fix:** remove the two `c++_shared` lines from Android.mk. The
+      runtime still gets bundled in the AAR via the APP_STL
+      declaration.
+- **Validation:** after the build completes, verify the AAR still
+      contains `jni/<abi>/libc++_shared.so` for each ABI. If missing,
+      the implicit-packaging hypothesis is wrong and we'd need to
+      add the lib via a different mechanism (`APP_STL := c++_shared`
+      is already there; if not enough, fall back to `LOCAL_LDLIBS`
+      with explicit path).
+- **Commit:** _set on commit_
+
 ### U18 — NDK r27 ships host libxml2.so; collides with cross-compiled — disable libxml2
 
 - [x] Fixed
