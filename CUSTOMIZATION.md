@@ -5,6 +5,70 @@ this fork applies on top of stock FFmpeg fftools. It is intentionally
 evergreen — when the FFmpeg version is bumped, re-apply each item below to
 the new fftools snapshot. Update the checkboxes as work progresses.
 
+## Current state snapshot (for next major bump)
+
+**Commit on `upgrade/ffmpeg-7.1.3`:** `149fdf1` (B2 — thin device frameworks).
+**Tag `n7.1.3-customized`:** `68a62b8` (last commit validated to produce a
+working AAR; B1/B2 added after, validation pending in iOS run #37).
+
+**Working artifacts (Android only, pending B1+B2 iOS rebuild):**
+- Android AAR: `c:/temp/Git/_upgrade_work/run35_aar/ffmpeg-kit.aar`
+  (71 MB, all libs 16 KB-aligned, NDK r27d, dropped into chat-kmp).
+- iOS xcframework (pre-B1/B2): `c:/temp/Git/_upgrade_work/run36_xcframework/`
+  (95 MB, fat device slice, signed — will be replaced by run #37 output).
+
+**Acceptance criteria for declaring n7.1.3 "done":**
+1. Android emulator installs the AAR on a 16 KB-page device (the
+   original blocker that motivated U12).
+2. chat-kmp video upload runs end-to-end via the new AAR.
+3. iOS xcframework from B1+B2 build drops into chat-kmp without
+   needing the `codesign --remove-signature` or `lipo -thin` workflow
+   steps.
+
+**Things deliberately deferred to a separate effort:**
+- **B3 — size trim** via `--disable-everything` + per-feature enables.
+  Documented; not started. Estimated 25–35 MB AAR (3× shrink).
+- **Linux/macOS/tvOS build-script validation.** `*-build-scripts.yml`
+  workflows currently only auto-fire on push to `main`. We never
+  validated those platforms with our customizations because chat-kmp
+  doesn't consume them. Add `workflow_dispatch:` to those workflows
+  and run before merging to main, OR catch the breakage post-merge.
+
+## Notes for n7.x → n8.x upgrade
+
+**The good news:** the bulk of what we did is transferable.
+- C1–C10 source customizations are about how ffmpeg-kit calls fftools;
+  the *pattern* survives the n8.x fftools refactor even if specific
+  files change. Apply each C-item to the n8.x stock fftools.
+- U1–U19 build-script fixes are mostly NDK-r27/clang-18 related, not
+  FFmpeg-version-specific. They'll apply identically.
+- B1, B2 (when verified green) become baseline build behaviour.
+
+**What will likely change in n8.x:**
+- `fftools/` will probably gain 1–3 new sources (n6→n7 added 5;
+  n7→n8 announced AVChannelLayout cleanup completion + scheduler
+  improvements). Mirror them in `apple/src/`,
+  `android/.../cpp/`, `linux/src/` + each platform's build file
+  (similar to U4).
+- More API removals — possibly more wrapper edits (similar shape to
+  C2's setjmp + C10's program_name fix).
+- New `-Werror` warnings from new sources. Add `-Wno-*` to U8's set as
+  needed.
+- arthenica mirrors will be even staler. U1 (don't speculatively bump
+  external libs) applies more strongly than before.
+
+**Suggested approach for the next bump:**
+1. **Validate n7.1.3 first** — meet acceptance criteria above. If
+   broken on chat-kmp, fix on this branch; don't paper over with an
+   n8.x version bump.
+2. Branch off `upgrade/ffmpeg-7.1.3` → `upgrade/ffmpeg-8.x`.
+3. Walk the pre-upgrade checklist proactively before running CI.
+4. Re-run `replay.sh` against n8.x stock fftools (the script lives
+   at `c:/temp/Git/_upgrade_work/replay.sh` — copy into the repo
+   under `scripts/upgrade/replay.sh` to make it durable).
+5. Re-apply C1–C10 on top of stock-n8.x fftools.
+6. Single full validation pass on n8.x (not n7.1.3 + n8.x separately).
+
 ## Lineage
 
 | Tag | Meaning |
