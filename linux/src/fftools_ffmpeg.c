@@ -78,25 +78,16 @@
 #include "libavdevice/avdevice.h"
 
 #include "fftools_cmdutils.h"
+#if CONFIG_MEDIACODEC
+#include "compat/android/binder.h"
+#endif
 #include "fftools_ffmpeg.h"
 #include "fftools_ffmpeg_sched.h"
 #include "fftools_ffmpeg_utils.h"
+#include "graph/graphprint.h"
 
-/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n7.1.3.
- * See CUSTOMIZATION.md at the repo root for the full framework.
- *
- *   C1 — main() renamed ffmpeg_execute()
- *   C2 — body wrapped in setjmp(ex_buf__); failed runs longjmp here instead
- *        of calling exit()
- *   C4 — cancel_operation() no-op stub (chat-kmp does not use cancel API)
- *   C5 — set_report_callback() no-op stub (chat-kmp does not consume stats)
- *   C6 — setvbuf(stderr) and fflush(stderr) calls removed
- */
-#include "ffmpegkit_exception.h"
-
-/* C10: program_name / program_birth_year are mutable thread-locals defined in
- * fftools_cmdutils.c. The per-tool values are set at the top of
- * ffmpeg_execute() below. See CUSTOMIZATION.md C10 for rationale. */
+const char program_name[] = "ffmpeg";
+const int program_birth_year = 2000;
 
 FILE *vstats_file;
 
@@ -262,7 +253,6 @@ void term_init(void)
 /* read a key without blocking */
 static int read_key(void)
 {
-    unsigned char ch;
 #if HAVE_TERMIOS_H
     int n = 1;
     struct timeval tv;
@@ -274,6 +264,7 @@ static int read_key(void)
     tv.tv_usec = 0;
     n = select(1, &rfds, NULL, NULL, &tv);
     if (n > 0) {
+        unsigned char ch;
         n = read(0, &ch, 1);
         if (n == 1)
             return ch;
@@ -298,6 +289,7 @@ static int read_key(void)
         }
         //Read it
         if(nchars != 0) {
+            unsigned char ch;
             if (read(0, &ch, 1) == 1)
                 return ch;
             return 0;
@@ -321,6 +313,9 @@ const AVIOInterruptCB int_cb = { decode_interrupt_cb, NULL };
 
 static void ffmpeg_cleanup(int ret)
 {
+    if ((print_graphs || print_graphs_file) && nb_output_files > 0)
+        print_filtergraphs(filtergraphs, nb_filtergraphs, input_files, nb_input_files, output_files, nb_output_files);
+
     if (do_benchmark) {
         int64_t maxrss = getmaxrss() / 1024;
         av_log(NULL, AV_LOG_INFO, "bench: maxrss=%"PRId64"KiB\n", maxrss);
@@ -352,6 +347,9 @@ static void ffmpeg_cleanup(int ret)
     hw_device_free_all();
 
     av_freep(&filter_nbthreads);
+
+    av_freep(&print_graphs_file);
+    av_freep(&print_graphs_format);
 
     av_freep(&input_files);
     av_freep(&output_files);
@@ -406,6 +404,7 @@ static void frame_data_free(void *opaque, uint8_t *data)
 {
     FrameData *fd = (FrameData *)data;
 
+    av_frame_side_data_free(&fd->side_data, &fd->nb_side_data);
     avcodec_parameters_free(&fd->par_enc);
 
     av_free(data);
@@ -435,6 +434,8 @@ static int frame_data_ensure(AVBufferRef **dst, int writable)
 
             memcpy(fd, fd_src, sizeof(*fd));
             fd->par_enc = NULL;
+            fd->side_data = NULL;
+            fd->nb_side_data = 0;
 
             if (fd_src->par_enc) {
                 int ret = 0;
@@ -443,6 +444,16 @@ static int frame_data_ensure(AVBufferRef **dst, int writable)
                 ret = fd->par_enc ?
                       avcodec_parameters_copy(fd->par_enc, fd_src->par_enc) :
                       AVERROR(ENOMEM);
+                if (ret < 0) {
+                    av_buffer_unref(dst);
+                    av_buffer_unref(&src);
+                    return ret;
+                }
+            }
+
+            if (fd_src->nb_side_data) {
+                int ret = clone_side_data(&fd->side_data, &fd->nb_side_data,
+                                          fd_src->side_data, fd_src->nb_side_data, 0);
                 if (ret < 0) {
                     av_buffer_unref(dst);
                     av_buffer_unref(&src);
@@ -568,7 +579,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     static int64_t last_time = -1;
     static int first_report = 1;
     uint64_t nb_frames_dup = 0, nb_frames_drop = 0;
-    int mins, secs, us;
+    int mins, secs, ms, us;
     int64_t hours;
     const char *hours_sign;
     int ret;
@@ -592,6 +603,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     vid = 0;
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_AUTOMATIC);
     av_bprint_init(&buf_script, 0, AV_BPRINT_SIZE_AUTOMATIC);
+
     for (OutputStream *ost = ost_iter(NULL); ost; ost = ost_iter(ost)) {
         const float q = ost->enc ? atomic_load(&ost->quality) / (float) FF_QP2LAMBDA : -1;
 
@@ -682,6 +694,15 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         av_bprintf(&buf_script, "speed=%4.3gx\n", speed);
     }
 
+    secs = (int)t;
+    ms = (int)((t - secs) * 1000);
+    mins = secs / 60;
+    secs %= 60;
+    hours = mins / 60;
+    mins %= 60;
+
+    av_bprintf(&buf, " elapsed=%"PRId64":%02d:%02d.%02d", hours, mins, secs, ms / 10);
+
     if (print_stats || is_last_report) {
         const char end = is_last_report ? '\n' : '\r';
         if (print_stats==1 && AV_LOG_INFO > av_log_get_level()) {
@@ -689,8 +710,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         } else
             av_log(NULL, AV_LOG_INFO, "%s    %c", buf.str, end);
 
-        /* C6: fflush(stderr) removed — caused log ordering issues on
-         * the iOS bridge when running embedded. */
+        fflush(stderr);
     }
     av_bprint_finalize(&buf, NULL);
 
@@ -742,7 +762,7 @@ static void print_stream_maps(void)
                 av_log(NULL, AV_LOG_INFO, " (graph %d)", ost->filter->graph->index);
 
             av_log(NULL, AV_LOG_INFO, " -> Stream #%d:%d (%s)\n", ost->file->index,
-                   ost->index, ost->enc_ctx->codec->name);
+                   ost->index, ost->enc->enc_ctx->codec->name);
             continue;
         }
 
@@ -751,9 +771,9 @@ static void print_stream_maps(void)
                ost->ist->index,
                ost->file->index,
                ost->index);
-        if (ost->enc_ctx) {
+        if (ost->enc) {
             const AVCodec *in_codec    = ost->ist->dec;
-            const AVCodec *out_codec   = ost->enc_ctx->codec;
+            const AVCodec *out_codec   = ost->enc->enc_ctx->codec;
             const char *decoder_name   = "?";
             const char *in_codec_name  = "?";
             const char *encoder_name   = "?";
@@ -958,51 +978,16 @@ static int64_t getmaxrss(void)
 #endif
 }
 
-/* C4 — cancel_operation: no-op stub. chat-kmp doesn't call FFmpegKit.cancel();
- * cancellation is handled at the coroutine layer instead. Symbol exists so
- * the wrapper layer (ffmpegkit.c, FFmpegKit.m) links. To implement real
- * cancellation, set a session-id-keyed atomic flag here and poll it inside
- * fftools_ffmpeg_sched.c::sch_wait. */
-void cancel_operation(long id) {
-    (void)id;
-}
-
-/* C5 — set_report_callback: no-op stub. chat-kmp doesn't consume the
- * Statistics API. The wrapper calls this at session start/end and the
- * symbol must resolve. forward_report() is intentionally NOT wired into
- * print_report(); add that if a future consumer needs progress events.
- * The ffmpeg_report_callback typedef lives in fftools_ffmpeg.h. */
-static __thread ffmpeg_report_callback report_callback = NULL;
-
-void set_report_callback(ffmpeg_report_callback fn) {
-    report_callback = fn;
-}
-
-/* C1 — entry point: main() renamed to ffmpeg_execute() so the wrapper layer
- * can invoke ffmpeg as a callable function instead of a process. */
-int ffmpeg_execute(int argc, char **argv)
+int main(int argc, char **argv)
 {
     Scheduler *sch = NULL;
 
     int ret;
     BenchmarkTimeStamps ti;
 
-    /* C2 — setjmp catches any exit_program() call deeper in the stack and
-     * unwinds back here with the exit code, rather than tearing down the
-     * host process. */
-    if (setjmp(ex_buf__) != 0) {
-        return longjmp_value;
-    }
-
-    /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
-    static char _program_name[] = "ffmpeg";
-    program_name = _program_name;
-    program_birth_year = 2000;
-
     init_dynload();
 
-    /* C6 — setvbuf(stderr) removed; it was a Win32-only requirement and
-     * stomped on the host process's stderr handling on Android/iOS. */
+    setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
     parse_loglevel(argc, argv, options);
@@ -1038,6 +1023,10 @@ int ffmpeg_execute(int argc, char **argv)
         goto finish;
     }
 
+#if CONFIG_MEDIACODEC
+    android_binder_threadpool_init_if_required();
+#endif
+
     current_time = ti = get_benchmark_time_stamps();
     ret = transcode(sch);
     if (ret >= 0 && do_benchmark) {
@@ -1061,6 +1050,9 @@ finish:
     ffmpeg_cleanup(ret);
 
     sch_free(&sch);
+
+    av_log(NULL, AV_LOG_VERBOSE, "\n");
+    av_log(NULL, AV_LOG_VERBOSE, "Exiting with exit code %d\n", ret);
 
     return ret;
 }

@@ -32,7 +32,6 @@ libffmpegkit_la_SOURCES = \
     fftools_ffmpeg_opt.c \
     fftools_ffmpeg_sched.c \
     fftools_ffprobe.c \
-    fftools_objpool.c \
     fftools_opt_common.c \
     fftools_sync_queue.c \
     fftools_thread_queue.c
@@ -71,7 +70,6 @@ include_HEADERS = \
     fftools_ffmpeg_sched.h \
     fftools_ffmpeg_utils.h \
     fftools_fopen_utf8.h \
-    fftools_objpool.h \
     fftools_opt_common.h \
     fftools_sync_queue.h \
     fftools_thread_queue.h

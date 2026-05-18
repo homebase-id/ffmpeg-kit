@@ -36,21 +36,13 @@
 
 /**
  * program name, defined by the program for show_version().
- *
- * Homebase ffmpeg-kit C10: stock declares this as a `const char []` defined
- * once per standalone tool (ffmpeg, ffprobe). Because ffmpeg-kit links both
- * tools into a single .so, both definitions would collide at link time. We
- * change it to a mutable thread-local pointer; `ffmpeg_execute()` and
- * `ffprobe_execute()` each set it to their own value at entry.
  */
-extern __thread char *program_name;
+extern const char program_name[];
 
 /**
  * program birth year, defined by the program for show_banner()
- *
- * Homebase ffmpeg-kit C10: see program_name above for rationale.
  */
-extern __thread int program_birth_year;
+extern const int program_birth_year;
 
 extern AVDictionary *sws_dict;
 extern AVDictionary *swr_opts;
@@ -165,6 +157,10 @@ int stream_specifier_parse(StreamSpecifier *ss, const char *spec,
 unsigned stream_specifier_match(const StreamSpecifier *ss,
                                 const AVFormatContext *s, const AVStream *st,
                                 void *logctx);
+
+unsigned stream_group_specifier_match(const StreamSpecifier *ss,
+                                      const AVFormatContext *s, const AVStreamGroup *stg,
+                                      void *logctx);
 
 void stream_specifier_uninit(StreamSpecifier *ss);
 
@@ -327,7 +323,7 @@ typedef struct Option {
 } Option;
 
 typedef struct OptionGroupDef {
-    /**< group name */
+    /** group name */
     const char *name;
     /**
      * Option to be used as group separator. Can be NULL for groups which
@@ -543,7 +539,7 @@ void *allocate_array_elem(void *array, size_t elem_size, int *nb_elems);
 double get_rotation(const int32_t *displaymatrix);
 
 /* read file contents into a string */
-char *file_read(const char *filename);
+char *read_file_to_string(const char *filename);
 
 /* Remove keys in dictionary b from dictionary a */
 void remove_avoptions(AVDictionary **a, AVDictionary *b);
@@ -552,5 +548,13 @@ void remove_avoptions(AVDictionary **a, AVDictionary *b);
 int check_avoptions(AVDictionary *m);
 
 int cmdutils_isalnum(char c);
+
+/**
+ * This does the same as libavformat/dump.c corresponding function
+ * and should probably be kept in sync when the other one changes.
+ */
+void dump_dictionary(void *ctx, const AVDictionary *m,
+                     const char *name, const char *indent,
+                     int log_level);
 
 #endif /* FFTOOLS_CMDUTILS_H */
