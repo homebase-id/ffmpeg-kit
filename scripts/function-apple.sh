@@ -555,8 +555,34 @@ create_ffmpeg_xcframework() {
       exit_xcframework "${FRAMEWORK_NAME}"
     fi
 
+    # B1: produce unsigned xcframeworks; chat-kmp signs them in its own pipeline.
+    strip_xcframework_signatures "${XCFRAMEWORK_PATH}"
+
     echo -e "DEBUG: xcframework for ${FFMPEG_LIB} built successfully\n" 1>>"${BASEDIR}"/build.log 2>&1
   done
+}
+
+# B1: strip implicit Xcode signatures from a freshly-built xcframework so the
+# downstream consumer (chat-kmp) can sign without conflicting identifiers and
+# without hitting the Xcode-26-on-macos-15 codesign hang. Walks the bundle
+# and removes every _CodeSignature dir plus every Mach-O signature.
+# Idempotent and safe; no-ops if nothing is signed.
+strip_xcframework_signatures() {
+  local XCFRAMEWORK_PATH="$1"
+  [ -d "${XCFRAMEWORK_PATH}" ] || return 0
+
+  # Remove _CodeSignature directories (manifests for bundle signatures).
+  find "${XCFRAMEWORK_PATH}" -type d -name "_CodeSignature" -exec rm -rf {} + 2>>"${BASEDIR}"/build.log || true
+
+  # Remove Mach-O signatures from each .framework's executable.
+  find "${XCFRAMEWORK_PATH}" -type d -name "*.framework" | while read -r fw; do
+    local exe="${fw}/$(basename "${fw}" .framework)"
+    if [ -f "${exe}" ]; then
+      codesign --remove-signature "${exe}" 2>>"${BASEDIR}"/build.log || true
+    fi
+  done
+
+  echo -e "DEBUG: stripped signatures from $(basename ${XCFRAMEWORK_PATH})\n" 1>>"${BASEDIR}"/build.log 2>&1
 }
 
 create_ffmpeg_kit_xcframework() {
@@ -590,6 +616,9 @@ create_ffmpeg_kit_xcframework() {
   if [[ ${COMMAND_OUTPUT} == *"is empty in library"* ]]; then
     exit_xcframework "${FRAMEWORK_NAME}"
   fi
+
+  # B1: produce unsigned xcframework; chat-kmp signs in its own pipeline.
+  strip_xcframework_signatures "${XCFRAMEWORK_PATH}"
 
   echo -e "DEBUG: xcframework for ffmpeg-kit built successfully\n" 1>>"${BASEDIR}"/build.log 2>&1
 }

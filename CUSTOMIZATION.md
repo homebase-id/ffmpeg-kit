@@ -1072,18 +1072,26 @@ the n7.1.3 upgrade works (AAR built, chat-kmp Android/JVM tests green).
 
 ## B1 — iOS xcframework is code-signed; chat-kmp has to strip signatures
 
-- [ ] Investigate whether `./ios.sh` is invoking a `codesign` step we can
-      suppress, or whether the signature is inherited from the Xcode
-      toolchain doing implicit signing on framework embedding.
-- [ ] If suppressing isn't possible, add a post-build step in `./ios.sh`
-      that runs `codesign --remove-signature` across each architecture
-      slice in the produced xcframework so chat-kmp can drop its
-      signature-strip workaround.
+- [x] **Resolved.** Added `strip_xcframework_signatures()` in
+      `scripts/function-apple.sh`, called after each
+      `xcodebuild -create-xcframework` invocation (both
+      `create_ffmpeg_xcframeworks` and `create_ffmpeg_kit_xcframework`).
+      Walks the bundle removing `_CodeSignature` directories and
+      running `codesign --remove-signature` on each
+      `.framework`'s Mach-O executable.
 
-**Why:** chat-kmp currently runs a custom script to strip signatures from
-the embedded `ffmpegkit.framework` before its own app signing pass.
-That's a workaround for ffmpeg-kit shipping signed binaries — the right
-fix lives here.
+**What was going on.** ffmpeg-kit's scripts contain **no explicit**
+`codesign` calls — signing is **implicit** from `xcodebuild
+-create-xcframework`, which uses the default Xcode signing identity.
+There's no `--no-sign` flag for that command. The only way to produce
+unsigned output is post-process.
+
+**chat-kmp impact.** Once a build with this fix lands and the new
+xcframework is dropped into chat-kmp, the custom
+`codesign --remove-signature` step in chat-kmp's iOS workflow can be
+removed entirely. The Xcode-26-on-macos-15 codesign hang at the Embed
+Frameworks step (the symptom motivating B1 + B2) is addressed by the
+combination of B1 (unsigned input) + B2 (thin slices, still pending).
 
 ## B2 — iOS xcframework ships fat (multi-arch) binaries; chat-kmp wants thin
 
