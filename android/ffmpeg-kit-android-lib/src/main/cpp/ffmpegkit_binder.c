@@ -28,7 +28,11 @@
 #include <stdlib.h>
 
 #include "libavutil/log.h"
-#include "binder.h"
+/* U24 follow-up: stock compat/android/binder.c does `#include "binder.h"`
+ * because binder.h lives next to it in compat/android/. We flatten the
+ * file into the wrapper cpp dir, so route to the installed copy at
+ * the include root (installed by U21 via scripts/android/ffmpeg.sh). */
+#include "compat/android/binder.h"
 
 #define THREAD_POOL_SIZE 1
 
