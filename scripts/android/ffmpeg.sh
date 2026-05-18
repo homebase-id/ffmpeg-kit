@@ -435,6 +435,7 @@ fi
   --strip="${STRIP}" \
   --nm="${NM}" \
   --extra-libs="$(pkg-config --libs --static cpu-features)" \
+  --extra-ldflags="-Wl,-z,max-page-size=16384" \
   --disable-autodetect \
   --enable-cross-compile \
   --enable-pic \

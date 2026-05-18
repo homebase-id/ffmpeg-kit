@@ -781,12 +781,23 @@ the build scripts going forward.
       whack-a-mole cycle of `-Wno-*` flag additions to `MY_CFLAGS`
       (see U8), AND for older library pins to break under stricter
       clang (see U13/U14).
-- **Belt-and-suspenders:** `scripts/function-android.sh` generates
-      `android/jni/Application.mk` at build time (the static file is
-      gitignored). The generated `APP_LDFLAGS` now includes
-      `-Wl,-z,max-page-size=16384` explicitly. Redundant with NDK r27+
-      defaults today, but protects against any future NDK downgrade or
-      default change.
+- **Belt-and-suspenders #1 (wrapper):**
+      `scripts/function-android.sh` generates `android/jni/Application.mk`
+      at build time (the static file is gitignored). The generated
+      `APP_LDFLAGS` now includes `-Wl,-z,max-page-size=16384`. This
+      only covers libs built by **ndk-build** — i.e. `libffmpegkit.so`
+      and `libffmpegkit_abidetect.so`.
+- **Belt-and-suspenders #2 (FFmpeg's own libs):** verified with
+      readelf that NDK r27d *did NOT* default to 16 KB alignment for
+      libs built by **FFmpeg's own configure/make** (libavcodec,
+      libavformat, libavutil, libpostproc, libswscale, libswresample,
+      libavdevice). They came out at `Align = 0x1000` (4 KB) without
+      explicit instruction. Added
+      `--extra-ldflags="-Wl,-z,max-page-size=16384"` to FFmpeg's
+      configure invocation in `scripts/android/ffmpeg.sh`. This flag
+      propagates to every FFmpeg-built `.so`. Without it, the
+      emulator install error fires on `lib/<abi>/libavcodec.so`
+      regardless of NDK version.
 - **Alternative path** (not taken): stay on r25b and add
       `-Wl,-z,max-page-size=16384` explicitly to every external
       library's LDFLAGS plus FFmpeg's `--extra-ldflags` plus
