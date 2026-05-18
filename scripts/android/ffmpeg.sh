@@ -514,6 +514,7 @@ fi
 
 # MANUALLY ADD REQUIRED HEADERS
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/compat 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/compat/android 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64 1>>"${BASEDIR}"/build.log 2>&1
@@ -521,6 +522,13 @@ mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.l
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/compat/va_copy.h "${FFMPEG_LIBRARY_PATH}"/include/compat/va_copy.h 1>>"${BASEDIR}"/build.log 2>&1
+# U21 (n8): stock fftools/ffmpeg.c added #include "compat/android/binder.h"
+# guarded by CONFIG_MEDIACODEC. Android NDK builds enable MediaCodec for
+# HW decode, so this include triggers. The header lives in FFmpeg's
+# compat/ tree and isn't installed by `make install`, so the wrapper
+# compile must see a copy at the include root. Apple/iOS doesn't hit this
+# (no MediaCodec there — uses VideoToolbox).
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/android/binder.h "${FFMPEG_LIBRARY_PATH}"/include/compat/android/binder.h 1>>"${BASEDIR}"/build.log 2>&1
 # FFmpeg n7's fftools unconditionally #include <stdbit.h> (C23 header).
 # NDK r25b clang (clang 14) doesn't ship it. FFmpeg's own configure
 # falls back to compat/stdbit/stdbit.h via -I; our wrapper compile
