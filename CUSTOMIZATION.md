@@ -7,80 +7,135 @@ the new fftools snapshot. Update the checkboxes as work progresses.
 
 ## Current state snapshot (for next major bump)
 
-**Commit on `upgrade/ffmpeg-7.1.3`:** `149fdf1` (B2 — thin device frameworks).
-**Tag `n7.1.3-customized`:** `68a62b8` (last commit validated to produce a
-working AAR; B1/B2 added after, validation pending in iOS run #37).
+**Branch:** `upgrade/ffmpeg-8.x` at commit `cc8d56e`
+(`fix(build/apple): stub resman resources + link zlib — U23/U25 for iOS`).
 
-**Working artifacts (Android only, pending B1+B2 iOS rebuild):**
-- Android AAR: `c:/temp/Git/_upgrade_work/run35_aar/ffmpeg-kit.aar`
-  (71 MB, all libs 16 KB-aligned, NDK r27d, dropped into chat-kmp).
-- iOS xcframework (pre-B1/B2): `c:/temp/Git/_upgrade_work/run36_xcframework/`
-  (95 MB, fat device slice, signed — will be replaced by run #37 output).
+**Tags relevant to this upgrade event:**
+- `pre-8.x-baseline` → `3f09956` — revert anchor on
+  `upgrade/ffmpeg-7.1.3`. If n8.x ever needs to be abandoned, branch
+  off this tag.
+- `stock-n8.1.1` → `fcd4c0a` — n8.1.1 fftools sources after
+  `replay.sh` re-snapshot but BEFORE any Homebase customizations.
+  Reference baseline for
+  `git diff stock-n8.1.1..HEAD -- '*/fftools_*'`.
+- `n8.1.1-customized` → `cc8d56e` — first commit producing green
+  CI on both platforms with all customizations applied. **Use this
+  as the revert anchor before any n9.x effort.**
 
-**Acceptance criteria for declaring n7.1.3 "done":**
-1. Android emulator installs the AAR on a 16 KB-page device (the
-   original blocker that motivated U12).
-2. chat-kmp video upload runs end-to-end via the new AAR.
-3. iOS xcframework from B1+B2 build drops into chat-kmp without
-   needing the `codesign --remove-signature` or `lipo -thin` workflow
-   steps.
+**Working artifacts (both platforms green, awaiting chat-kmp soak):**
+- Android AAR: `c:/temp/Git/_upgrade_work/run43_aar/ffmpeg-kit.aar`
+  (72 MB, all .so files in all 4 ABIs verified 16 KB-aligned, NDK r27d).
+  Workflow run #43 (id `26056303546`).
+- iOS xcframework: `c:/temp/Git/_upgrade_work/run45_xcframework/`
+  (85 MB, thin unsigned arm64 device slice — B1+B2 verified).
+  Workflow run #45 (id `26060208346`). ~10 MB lighter than n7.1.3 —
+  libpostproc removal accounts for most of the drop.
+
+**Acceptance criteria for declaring n8.1.1 "done":**
+1. chat-kmp video upload runs end-to-end via the new AAR on Android
+   (16 KB-page emulator + a 4 KB physical device for regression check).
+2. iOS xcframework drops into chat-kmp without needing the
+   `codesign --remove-signature` or `lipo -thin` workflow steps.
+3. chat-kmp HLS scenarios green on iOS — handed to macOS colleague.
+
+**Recovery commands if n8.1.1 needs to be abandoned:**
+```
+git checkout upgrade/ffmpeg-7.1.3
+git reset --hard pre-8.x-baseline
+# or to branch fresh:
+git checkout -b upgrade/ffmpeg-7.1.3-hotfix pre-8.x-baseline
+```
 
 **Things deliberately deferred to a separate effort:**
 - **B3 — size trim** via `--disable-everything` + per-feature enables.
-  Documented; not started. Estimated 25–35 MB AAR (3× shrink).
+  Documented; not started. Estimated 25–35 MB AAR (3× shrink). Even
+  more attractive now that we have n8's larger fftools surface area
+  (textformat + graph + resources subtrees added).
 - **Linux/macOS/tvOS build-script validation.** `*-build-scripts.yml`
-  workflows currently only auto-fire on push to `main`. We never
-  validated those platforms with our customizations because chat-kmp
-  doesn't consume them. Add `workflow_dispatch:` to those workflows
-  and run before merging to main, OR catch the breakage post-merge.
+  workflows currently only auto-fire on push to `main`. Add
+  `workflow_dispatch:` and validate before merge.
+- **Real `print_filtergraphs` support.** Currently stubbed via empty
+  `ff_graph_{html,css}_{data,len}` (U23). chat-kmp doesn't use
+  `-print_graphs`. If a future consumer needs it, replace the stubs
+  with real gzipped resource bytes via FFmpeg's
+  `fftools/resources/Makefile` pipeline (or vendor the .o files).
 
-## Notes for n7.x → n8.x upgrade
+## Notes for n8.x → n9.x upgrade
 
-**The good news:** the bulk of what we did is transferable.
-- C1–C10 source customizations are about how ffmpeg-kit calls fftools;
-  the *pattern* survives the n8.x fftools refactor even if specific
-  files change. Apply each C-item to the n8.x stock fftools.
-- U1–U19 build-script fixes are mostly NDK-r27/clang-18 related, not
-  FFmpeg-version-specific. They'll apply identically.
-- B1, B2 (when verified green) become baseline build behaviour.
+**What carries forward unchanged:**
+- C1–C10 source customizations (the entry-point rename, setjmp/longjmp,
+  thread-local globals, etc.). The *pattern* survives any FFmpeg
+  refactor even if specific anchors shift line numbers.
+- U1–U19 build-script fixes (NDK r27, clang 18, lib disables, header
+  installs). None are FFmpeg-version-specific.
+- U20–U25 (n8 fixes): libpostproc removal, binder install, vendoring
+  textformat/graph/resources, resman stubs, zlib link. These are
+  baseline now.
+- B1, B2 (no signatures, thin device frameworks). Baseline build
+  behaviour.
+- `scripts/upgrade/replay.sh` is now the authoritative
+  source-snapshot script. It handles flat fftools/ + subdir
+  fftools/(graph|resources|textformat)/ files with `fftools_`
+  flattening. Update the C_FILES / H_FILES / SUBDIR_C_FILES /
+  SUBDIR_H_FILES arrays when n9's fftools adds or removes files.
 
-**What will likely change in n8.x:**
-- `fftools/` will probably gain 1–3 new sources (n6→n7 added 5;
-  n7→n8 announced AVChannelLayout cleanup completion + scheduler
-  improvements). Mirror them in `apple/src/`,
-  `android/.../cpp/`, `linux/src/` + each platform's build file
-  (similar to U4).
-- More API removals — possibly more wrapper edits (similar shape to
-  C2's setjmp + C10's program_name fix).
-- New `-Werror` warnings from new sources. Add `-Wno-*` to U8's set as
-  needed.
-- arthenica mirrors will be even staler. U1 (don't speculatively bump
-  external libs) applies more strongly than before.
+**What will likely change in n9.x (educated guesses):**
+- More fftools file moves — n8 already moved a lot. The replay.sh
+  subdir handling is robust; just update the arrays.
+- More API removals (e.g. AVCodecContext deprecated fields finally
+  delete). `-Wno-deprecated-declarations` is already in U8's set.
+- arthenica/* external library mirrors continue to age. U1 applies
+  more strongly each cycle.
+- One more wave of stuff like libpostproc moving out of mainline.
+  Audit FFmpeg release notes for "removed from mainline" or "split
+  into separate repo" annotations.
 
 **Suggested approach for the next bump:**
-1. **Validate n7.1.3 first** — meet acceptance criteria above. If
-   broken on chat-kmp, fix on this branch; don't paper over with an
-   n8.x version bump.
-2. Branch off `upgrade/ffmpeg-7.1.3` → `upgrade/ffmpeg-8.x`.
-3. Walk the pre-upgrade checklist proactively before running CI.
-4. Re-run `replay.sh` against n8.x stock fftools (the script lives
-   at `c:/temp/Git/_upgrade_work/replay.sh` — copy into the repo
-   under `scripts/upgrade/replay.sh` to make it durable).
-5. Re-apply C1–C10 on top of stock-n8.x fftools.
-6. Single full validation pass on n8.x (not n7.1.3 + n8.x separately).
+1. **Validate n8.1.1 first.** Meet the acceptance criteria above
+   (chat-kmp Android + iOS soak). Don't paper over a broken n8.1.1
+   with an n9.x version bump.
+2. Branch off `upgrade/ffmpeg-8.x` → `upgrade/ffmpeg-9.x` (after
+   tagging `pre-9.x-baseline` at the post-validation commit).
+3. Download n9.x source, list-diff `fftools/` files vs n8.1.1:
+   ```
+   diff <(ls _upgrade_work/ffmpeg-n8.1.1/ffmpeg-8.1.1/fftools/*.{c,h} \
+            | xargs -n1 basename | sort) \
+        <(ls _upgrade_work/ffmpeg-n9.x.y/ffmpeg-9.x.y/fftools/*.{c,h} \
+            | xargs -n1 basename | sort)
+   diff <(find _upgrade_work/ffmpeg-n8.1.1/ffmpeg-8.1.1/fftools \
+              -mindepth 2 -name '*.[ch]' | xargs -n1 basename | sort) \
+        <(find _upgrade_work/ffmpeg-n9.x.y/ffmpeg-9.x.y/fftools \
+              -mindepth 2 -name '*.[ch]' | xargs -n1 basename | sort)
+   ```
+4. Update the file arrays in `scripts/upgrade/replay.sh`.
+5. Update the `ffmpeg)` `SOURCE_ID` in `scripts/source.sh` (and
+   pre-check the arthenica mirror has the tag).
+6. Walk the pre-upgrade checklist proactively before running CI.
+7. Run `FFMPEG_SRC=/path/to/n9.x scripts/upgrade/replay.sh`.
+8. Re-apply C1/C2/C4/C5/C6/C10 to the freshly replayed files. Use
+   `git diff stock-n8.1.1..n8.1.1-customized -- '*/fftools_*'` as
+   the exact diff template.
+9. Update build files (Android.mk MY_SRC_FILES, Makefile.am × 2)
+   if files were added/removed.
+10. Single full validation pass on n9.x.
 
 ## Lineage
 
-| Tag | Meaning |
+| Tag / Branch | Meaning |
 | --- | --- |
-| `pre-7.1.3-baseline` | Last working build on FFmpeg n6.0. Safety net. |
-| `stock-n7.1.3` | Stock FFmpeg n7.1.3 `fftools/` re-snapshotted into all three platform trees, with the `fftools_` prefix rename and `#include` rewrites applied. **No Homebase customizations yet.** |
-| `upgrade/ffmpeg-7.1.3` | Active branch where customizations are being layered on top of `stock-n7.1.3`. |
+| `pre-7.1.3-baseline` | Last working build on FFmpeg n6.0. Original safety net. |
+| `stock-n7.1.3` | Stock n7.1.3 fftools re-snapshotted with `fftools_` prefix. No customizations yet. |
+| `n7.1.3-customized` → `68a62b8` | Last n7 commit producing a green AAR (run #35, pre-B1/B2). |
+| `pre-8.x-baseline` → `3f09956` | All n7.1.3 work + B1/B2 + handoff docs. Revert anchor if n8.x ever needs to be abandoned. |
+| `upgrade/ffmpeg-7.1.3` | The n7 branch; still around for future hotfixes. |
+| `stock-n8.1.1` → `fcd4c0a` | Stock n8.1.1 fftools re-snapshotted (incl. graph/, resources/, textformat/ subdirs flattened with `fftools_` prefix). No customizations yet. |
+| `n8.1.1-customized` → `cc8d56e` | First commit producing green CI on both platforms for n8.1.1. **Pre-9.x revert anchor.** |
+| `upgrade/ffmpeg-8.x` | Active branch carrying all the above. Not yet merged to `main`. |
 
 To see *exactly* what makes our build different from stock FFmpeg, run:
 
 ```
-git diff stock-n7.1.3..HEAD -- '*/fftools_*.c' '*/fftools_*.h'
+git diff stock-n8.1.1..HEAD -- '*/fftools_*.c' '*/fftools_*.h'
 ```
 
 That diff is the customization set. Everything in it should be documented here.
@@ -514,6 +569,184 @@ same categories.
     or newer. Older NDKs produce `.so` files with 4 KB-aligned LOAD
     segments which Android 15+ on 16 KB-page devices refuses to load.
     Google Play requires this for app updates as of Nov 1, 2025.
+12. **libpostproc gone (U20).** Don't try to link `libpostproc` /
+    `-framework libpostproc` / `libpostproc_neon` anywhere. FFmpeg 8
+    removed it from mainline (lives separately at
+    `michaelni/libpostproc`). If a future FFmpeg version restores it,
+    revisit U20.
+13. **MediaCodec binder + new fftools subdirs (U21, U22, U24).**
+    For Android: install `compat/android/binder.h` and compile
+    `compat/android/binder.c` (as `ffmpegkit_binder.c`) into the
+    wrapper. For all platforms: vendor the
+    `fftools/{graph,resources,textformat}/` subdirs via
+    `scripts/upgrade/replay.sh`'s SUBDIR_* arrays.
+14. **resman resource stubs + zlib link (U23, U25).** Without
+    FFmpeg's `fftools/resources/Makefile` bin2c pipeline, the
+    `ff_graph_{html,css}_{data,len}` symbols are undefined. Stub
+    them via `ffmpegkit_resources.c`. Also link `-lz` on Apple
+    (resman.c calls `inflate*`).
+
+## n7.1.3 → n8.1.1 fixes (2026-05)
+
+These were the build-script patches needed to compile FFmpeg n8.1.1
+on top of the n7.1.3-era ffmpeg-kit scripts. Each is checked-in and
+lives in the build scripts going forward.
+
+### U20 — libpostproc removed from FFmpeg 8
+
+- [x] Fixed
+- **Symptom (Android run #38):** ndk-build of wrapper failed with
+      `Android NDK: ERROR:jni/ffmpeg/neon/Android.mk:postproc_neon:
+      LOCAL_SRC_FILES points to a missing file`. All FFmpeg + ext libs
+      built OK; only the wrapper link tripped on the missing
+      `libpostproc_neon.so` artifact.
+- **Root cause:** FFmpeg 8.0 removed libpostproc from mainline. It
+      now lives separately at `michaelni/libpostproc` (or as a
+      sourceplugin branch). FFmpeg's configure/make no longer emits
+      `libpostproc.so` of any flavour. Our U9 follow-up (link
+      libpostproc in 5 places) hard-references the artifact that no
+      longer exists.
+- **Fix:** undo the U9 link wiring in 6 places:
+      * `android/jni/Android.mk` — drop `libpostproc` and
+        `libpostproc_neon` from both LOCAL_SHARED_LIBRARIES lines.
+      * `android/jni/ffmpeg/Android.mk` — drop the libpostproc
+        module block.
+      * `android/jni/ffmpeg/neon/Android.mk` — drop libpostproc_neon
+        block.
+      * `scripts/apple/ffmpeg.sh` — drop
+        `create_temporary_framework "libpostproc"`.
+      * `apple/configure.ac` — drop `-framework libpostproc` from
+        FFMPEG_FRAMEWORKS.
+      * `linux/configure.ac` — drop `-lpostproc` from FFMPEG_LIBS.
+- **Wrapper source side:** n8's `fftools/ffprobe.c` no longer
+      `#include`s `libpostproc/postprocess.h` or calls
+      `postproc_version()` (the entire conditional-postproc dance
+      from U9 is gone in stock n8). `replay.sh` pulls in the clean
+      version automatically.
+- **Commit:** `6516c4c`
+
+### U21 — n8 added `compat/android/binder.h` include to fftools/ffmpeg.c
+
+- [x] Fixed
+- **Symptom (Android run #39):**
+      `jni/.../fftools_ffmpeg.c:82:10: fatal error:
+      'compat/android/binder.h' file not found`
+- **Root cause:** n8's `fftools/ffmpeg.c` added a `CONFIG_MEDIACODEC`-
+      guarded `#include "compat/android/binder.h"` for Android hardware
+      decoder threadpool initialization. The header lives in FFmpeg's
+      `compat/` tree which `make install` doesn't ship — only its own
+      build sees it via `-I` includes.
+- **Fix:** add an `overwrite_file` line to
+      `scripts/android/ffmpeg.sh` that installs the header to
+      `${FFMPEG_LIBRARY_PATH}/include/compat/android/binder.h`,
+      alongside the existing `compat/va_copy.h` install pattern. Also
+      `mkdir -p compat/android` in the install tree.
+- **iOS/Linux:** unaffected. No `CONFIG_MEDIACODEC` outside Android;
+      iOS uses VideoToolbox.
+- **Commit:** `d59839c`
+
+### U22 — n8 added fftools subdirs (graph, resources, textformat)
+
+- [x] Fixed
+- **Symptom (Android run #40):**
+      `fatal error: 'graph/graphprint.h' file not found`. Behind
+      that, also `textformat/avtextformat.h` and `resources/resman.h`
+      missing from the wrapper compile.
+- **Root cause:** n8 introduced three new `fftools/` subdirectories
+      when ffprobe was refactored to use a generalized text-format
+      library (`AVTextFormatter` replaces n7's `Writer`) and
+      `-print_graphs` was added:
+      * `fftools/graph/` — print_filtergraphs() implementation.
+      * `fftools/resources/` — resman (resource manager).
+      * `fftools/textformat/` — generalized formatter library
+        (compact/default/flat/ini/json/mermaid/xml + writers).
+      n7's `replay.sh` only vendored flat `fftools/*.c` files; the
+      subdir files weren't being snapshotted into our platform trees,
+      so includes and symbols were missing.
+- **Fix:** extend `scripts/upgrade/replay.sh` with `SUBDIR_C_FILES`
+      and `SUBDIR_H_FILES` arrays. Files get flattened into the
+      vendor tree as `fftools_<basename>.{c,h}` (same `fftools_`
+      prefix as flat files). The sed expression now also strips the
+      `fftools/`, `graph/`, `resources/`, `textformat/`,
+      `fftools/graph/`, etc. prefixes from `#include` lines. Switched
+      to ERE mode (`sed -E`) with `@` as delimiter because the BRE
+      `\|` alternation we tried first didn't actually match anything.
+- **Build files:** add the 13 new `fftools_*.c` to
+      `android/jni/Android.mk` `MY_SRC_FILES`, and to
+      `apple/src/Makefile.am` + `linux/src/Makefile.am`
+      `libffmpegkit_la_SOURCES`. Also add the 6 new `.h` to the
+      `include_HEADERS` lists.
+- **Why we couldn't just drop graphprint and friends:** n8's
+      `ffprobe.c` uses `AVTextFormatter` types directly in its main
+      function — it's not optional. textformat is load-bearing now.
+- **Commit:** `446f5bf`
+
+### U23 — resman references ff_graph_* externs that ndk-build can't produce
+
+- [x] Fixed
+- **Symptom (Android run #41, iOS run #44):** wrapper link fails
+      with undefined `ff_graph_html_data`, `ff_graph_html_len`,
+      `ff_graph_css_data`, `ff_graph_css_len`.
+- **Root cause:** `fftools/resources/resman.c` references these as
+      `extern const`s. FFmpeg's `fftools/resources/Makefile`
+      gzip-embeds the raw `graph.html` / `graph.css` files into
+      object files via bin2c-style tooling and emits them as
+      `graph.html.o` / `graph.css.o`. Our ndk-build / autotools
+      wrapper build doesn't run that Makefile, so the symbols are
+      never defined.
+- **Fix:** new wrapper source `ffmpegkit_resources.c` (in both
+      `android/.../cpp/` and `apple/src/`) that defines all four
+      symbols as empty stubs (`const unsigned char foo[] = { 0 };`).
+      Register in Android.mk `MY_SRC_FILES` and apple's
+      `libffmpegkit_la_SOURCES`. Linux similar if/when it gets the
+      same treatment.
+- **Runtime impact:** zero for chat-kmp. The resman code path is
+      only exercised by `-print_graphs` (filter graph mermaid
+      visualisation). chat-kmp never invokes it. If a future consumer
+      needs real graph rendering, replace the stubs with real
+      gzipped bytes or wire FFmpeg's resources/Makefile into the
+      build.
+- **Commits:** `8428c70` (Android) + `cc8d56e` (Apple)
+
+### U24 — compat/android/binder.c not compiled into wrapper
+
+- [x] Fixed
+- **Symptom (Android run #41):** link fails with undefined
+      `android_binder_threadpool_init_if_required`.
+- **Root cause:** the function is defined in
+      `compat/android/binder.c` (sibling to the binder.h we
+      installed in U21). The wrapper build needs the .c too, not
+      just the header. n7 didn't have any code in this file.
+- **Fix:** copy `compat/android/binder.c` into the wrapper cpp dir
+      as `ffmpegkit_binder.c`, add to `MY_SRC_FILES`. The file is
+      `__ANDROID__`-guarded internally; standalone deps (`dlfcn.h`,
+      `libavutil/log.h`). Then point its sibling `#include "binder.h"`
+      at `compat/android/binder.h` (the installed copy).
+- **Maintenance note:** binder.c isn't part of fftools, so
+      `replay.sh` doesn't touch it. Future upgrades should re-copy
+      from `compat/android/binder.c` if it changes upstream.
+- **Commits:** `8428c70` + `0dd16d7` (the include path fix)
+
+### U25 — Apple wrapper missing zlib link
+
+- [x] Fixed
+- **Symptom (iOS run #44):** link fails with undefined `_inflate`,
+      `_inflateEnd`, `_inflateInit2_`.
+- **Root cause:** `fftools/resources/resman.c` calls zlib `inflate*`
+      to decompress the gzipped embedded resources. The empty stubs
+      from U23 satisfy the *data* references but resman still
+      compiles the inflate calls — they're reachable at link time
+      even though they'll never execute at runtime (empty stub data
+      means resman early-exits before reaching the calls). iOS
+      doesn't auto-link zlib from system frameworks the way Android
+      does.
+- **Fix:** add `-lz` to `FFMPEG_FRAMEWORKS` in `apple/configure.ac`.
+      System zlib (`libz.tbd`) is always present on iOS/macOS.
+- **Android:** zlib already gets pulled in transitively through one
+      of the other libs (ext libs that depend on z). No extra wiring
+      needed.
+- **Linux:** same fix likely needed if/when Linux build is validated.
+- **Commit:** `cc8d56e`
 
 ## n6.0 → n7.1.3 fixes (2026-05)
 
