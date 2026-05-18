@@ -7,9 +7,26 @@ the new fftools snapshot. Update the checkboxes as work progresses.
 
 ## Current state snapshot (for next major bump)
 
-**Commit on `upgrade/ffmpeg-7.1.3`:** `149fdf1` (B2 — thin device frameworks).
-**Tag `n7.1.3-customized`:** `68a62b8` (last commit validated to produce a
-working AAR; B1/B2 added after, validation pending in iOS run #37).
+**Commit on `upgrade/ffmpeg-7.1.3`:** `3f09956` (handoff docs;
+B1+B2 in `149fdf1` / `14b8d7c` just before).
+
+**Tags relevant to this upgrade event:**
+- `pre-7.1.3-baseline` — pre-upgrade n6.0 state (the original
+  safety net before any work started).
+- `n7.1.3-customized` → `68a62b8` — last commit validated to
+  produce a green AAR (run #35). B1/B2 added after, awaiting
+  validation in iOS run #37.
+- `pre-8.x-baseline` → `3f09956` — **explicit revert anchor for
+  any future n8.x effort.** If 8.x goes off the rails, the safe
+  recovery is:
+  ```
+  git checkout upgrade/ffmpeg-7.1.3
+  git reset --hard pre-8.x-baseline
+  # or to branch from this point fresh:
+  git checkout -b upgrade/ffmpeg-8.x-attempt-2 pre-8.x-baseline
+  ```
+  Annotated tag — `git show pre-8.x-baseline` recalls full
+  context.
 
 **Working artifacts (Android only, pending B1+B2 iOS rebuild):**
 - Android AAR: `c:/temp/Git/_upgrade_work/run35_aar/ffmpeg-kit.aar`
@@ -73,9 +90,11 @@ working AAR; B1/B2 added after, validation pending in iOS run #37).
 
 | Tag | Meaning |
 | --- | --- |
-| `pre-7.1.3-baseline` | Last working build on FFmpeg n6.0. Safety net. |
+| `pre-7.1.3-baseline` | Last working build on FFmpeg n6.0. Safety net before any n7 work. |
 | `stock-n7.1.3` | Stock FFmpeg n7.1.3 `fftools/` re-snapshotted into all three platform trees, with the `fftools_` prefix rename and `#include` rewrites applied. **No Homebase customizations yet.** |
-| `upgrade/ffmpeg-7.1.3` | Active branch where customizations are being layered on top of `stock-n7.1.3`. |
+| `n7.1.3-customized` | Last commit (`68a62b8`) validated to produce a green AAR. Pre-B1/B2. |
+| `pre-8.x-baseline` | All n7.1.3 work + B1+B2 + handoff docs. **Revert anchor if any future n8.x effort fails.** |
+| `upgrade/ffmpeg-7.1.3` | Branch carrying all the above; not yet merged to `main`. |
 
 To see *exactly* what makes our build different from stock FFmpeg, run:
 
