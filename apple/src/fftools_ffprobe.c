@@ -64,7 +64,7 @@
 #include "libswresample/swresample.h"
 #include "libswresample/version.h"
 #include "libavfilter/version.h"
-#include "textformat/avtextformat.h"
+#include "fftools_avtextformat.h"
 #include "fftools_cmdutils.h"
 #include "fftools_opt_common.h"
 

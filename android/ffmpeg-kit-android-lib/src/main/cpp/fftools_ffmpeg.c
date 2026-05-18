@@ -84,7 +84,7 @@
 #include "fftools_ffmpeg.h"
 #include "fftools_ffmpeg_sched.h"
 #include "fftools_ffmpeg_utils.h"
-#include "graph/graphprint.h"
+#include "fftools_graphprint.h"
 
 /* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.1.
  * See CUSTOMIZATION.md at the repo root for the full framework.

@@ -47,7 +47,7 @@
 #include "libavutil/opt.h"
 #include "libavutil/parseutils.h"
 #include "libavutil/stereo3d.h"
-#include "graph/graphprint.h"
+#include "fftools_graphprint.h"
 
 HWDevice *filter_hw_device;
 

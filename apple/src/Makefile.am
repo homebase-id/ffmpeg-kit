@@ -35,7 +35,20 @@ libffmpegkit_la_SOURCES = \
     fftools_ffprobe.c \
     fftools_opt_common.c \
     fftools_sync_queue.c \
-    fftools_thread_queue.c
+    fftools_thread_queue.c \
+    fftools_graphprint.c \
+    fftools_resman.c \
+    fftools_avtextformat.c \
+    fftools_tf_compact.c \
+    fftools_tf_default.c \
+    fftools_tf_flat.c \
+    fftools_tf_ini.c \
+    fftools_tf_json.c \
+    fftools_tf_mermaid.c \
+    fftools_tf_xml.c \
+    fftools_tw_avio.c \
+    fftools_tw_buffer.c \
+    fftools_tw_stdout.c
 
 include_HEADERS = \
     AbstractSession.h \
@@ -73,7 +86,13 @@ include_HEADERS = \
     fftools_fopen_utf8.h \
     fftools_opt_common.h \
     fftools_sync_queue.h \
-    fftools_thread_queue.h
+    fftools_thread_queue.h \
+    fftools_graphprint.h \
+    fftools_resman.h \
+    fftools_avtextformat.h \
+    fftools_avtextwriters.h \
+    fftools_tf_internal.h \
+    fftools_tf_mermaid.h
 
 libffmpegkit_la_CFLAGS = $(CFLAGS)
 libffmpegkit_la_OBJCFLAGS = $(CFLAGS)

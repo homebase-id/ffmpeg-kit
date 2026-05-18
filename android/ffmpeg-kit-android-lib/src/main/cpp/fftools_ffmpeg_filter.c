@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #include "fftools_ffmpeg.h"
-#include "graph/graphprint.h"
+#include "fftools_graphprint.h"
 
 #include "libavfilter/avfilter.h"
 #include "libavfilter/buffersink.h"
