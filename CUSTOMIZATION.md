@@ -1095,6 +1095,25 @@ combination of B1 (unsigned input) + B2 (thin slices, still pending).
 
 ## B2 — iOS xcframework ships fat (multi-arch) binaries; chat-kmp wants thin
 
+- [x] **Resolved.** Added `--disable-arm64e` to `./ios.sh` invocation
+      in `.github/workflows/build-ios.yml`. With arm64e disabled, the
+      iOS device slice `ios-arm64_arm64e/` collapses to `ios-arm64/`
+      holding a thin arm64 Mach-O — no `lipo -create` of multiple
+      architectures into the device-slice framework binary, no
+      Xcode-26 codesign hang.
+- **Trade-off:** drops arm64e support. arm64e is a kernel pointer-auth
+      variant; iPhone XS+ devices run plain arm64 user code just fine
+      (kernel runs arm64e, app code is transparent). User-space apps
+      effectively never need arm64e.
+- **Simulator + Mac Catalyst slices stay fat** (arm64+x86_64) — that's
+      correct for those slices; the codesign hang only triggered on
+      device-slice fat. Those slices are also not in the iOS app's
+      Embed Frameworks phase for device builds.
+- **chat-kmp impact:** after a fresh iOS build with this flag, chat-kmp
+      can drop the `Thin FFmpegKit device-slice dylibs` workflow step.
+
+----
+
 - [ ] Audit how `./ios.sh` packages slices. The xcframework wrapper is
       correct, but each embedded `.framework`'s Mach-O may still be a fat
       binary (e.g., arm64 + x86_64 simulator combined). Apple deprecated

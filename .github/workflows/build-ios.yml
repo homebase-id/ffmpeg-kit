@@ -29,7 +29,7 @@ jobs:
         # workflow if it ever switches to --full. libxml2 (U18) is an
         # NDK-r27-Android-only collision; iOS uses Xcode toolchain and
         # isn't affected.
-        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --enable-gpl --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
+        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --disable-arm64e --enable-gpl --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *
