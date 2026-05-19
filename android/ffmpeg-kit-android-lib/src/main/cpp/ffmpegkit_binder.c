@@ -88,15 +88,28 @@ static void android_binder_threadpool_init(void)
         return;
     }
 
-    if (set_thread_pool_max != NULL) {
-        int ok = set_thread_pool_max(thread_pool_size);
-        av_log(NULL, AV_LOG_DEBUG,
-               "android/binder: ABinderProcess_setThreadPoolMaxThreadCount(%u) => %s\n",
-               thread_pool_size, ok ? "ok" : "fail");
-    } else {
-        av_log(NULL, AV_LOG_DEBUG,
-               "android/binder: ABinderProcess_setThreadPoolMaxThreadCount is unavailable; using library default\n");
-    }
+    /* Homebase: stock upstream calls
+     *     set_thread_pool_max(THREAD_POOL_SIZE = 1);
+     * here to cap the pool at one worker. But the host process
+     * (chat-kmp Android app, instrumented test runner, etc.) has
+     * almost always ALREADY started a binder pool with size > 1
+     * via the Android app framework. libbinder's
+     * ProcessState::setThreadPoolMaxThreadCount() refuses to shrink
+     * an already-started pool and aborts the process with:
+     *   F ProcessState: Binder threadpool cannot be shrunk after starting
+     * Skipping the call is safe: the existing pool serves us fine
+     * (its default size is plenty for MediaCodec callback traffic), and
+     * we still call start_thread_pool() below which is idempotent.
+     *
+     * This was confirmed by chat-kmp's compressVideo_h264MediaCodecSmoke
+     * test — with set_thread_pool_max enabled, the test aborts inside
+     * the call; with it skipped, MediaCodec encoding completes cleanly.
+     */
+    (void)set_thread_pool_max;
+    (void)thread_pool_size;
+    av_log(NULL, AV_LOG_DEBUG,
+           "android/binder: skipping set_thread_pool_max (host process "
+           "already manages binder pool size)\n");
 
     start_thread_pool();
     av_log(NULL, AV_LOG_DEBUG,
