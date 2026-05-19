@@ -1012,6 +1012,53 @@ void set_report_callback(ffmpeg_report_callback fn) {
     report_callback = fn;
 }
 
+/* C11 — reset global counters / pointers between ffmpeg_execute() calls.
+ *
+ * Stock ffmpeg is a one-shot process: it allocates these arrays, runs, then
+ * the process exits and the kernel reclaims memory. ffmpeg_cleanup() frees
+ * the arrays via av_freep() (which also NULLs the pointer) but leaves the
+ * COUNTER ints (nb_*) at their post-run values.
+ *
+ * In ffmpeg-kit we call ffmpeg_execute() repeatedly in the host process.
+ * The second invocation sees nb_input_files > 0 with input_files == NULL,
+ * and of_open() / similar functions NULL-deref iterating
+ * `for (i = 0; i < nb_input_files; i++) input_files[i]...`.
+ *
+ * This mirrors the n6.0-era ffmpeg_var_cleanup() — adapted to the n8 set of
+ * surviving globals. Call at the top of ffmpeg_execute() AFTER C2's setjmp
+ * (so the early-exit longjmp doesn't re-run it).
+ *
+ * Symptom this fixes: SIGSEGV at of_open+1339 → ffmpeg_parse_options →
+ * ffmpeg_execute on the SECOND ffmpeg-kit invocation in the same process.
+ */
+static void ffmpeg_var_cleanup(void)
+{
+    /* The signal / scheduler / exit-state vars are file-static within
+     * this translation unit — accessible directly because this function
+     * lives in fftools_ffmpeg.c. */
+    received_sigterm     = 0;
+    received_nb_signals  = 0;
+    atomic_store(&transcode_init_done, 0);
+
+    ffmpeg_exited     = 0;
+    copy_ts_first_pts = AV_NOPTS_VALUE;
+    longjmp_value     = 0;
+
+    atomic_store(&nb_output_dumped, 0);
+    progress_avio = NULL;
+
+    input_files      = NULL;
+    nb_input_files   = 0;
+    output_files     = NULL;
+    nb_output_files  = 0;
+    filtergraphs     = NULL;
+    nb_filtergraphs  = 0;
+    decoders         = NULL;
+    nb_decoders      = 0;
+
+    vstats_file = NULL;
+}
+
 /* C1 — entry point: main() renamed to ffmpeg_execute() so the wrapper layer
  * can invoke ffmpeg as a callable function instead of a process. */
 int ffmpeg_execute(int argc, char **argv)
@@ -1027,6 +1074,9 @@ int ffmpeg_execute(int argc, char **argv)
     if (setjmp(ex_buf__) != 0) {
         return longjmp_value;
     }
+
+    /* C11 — reset global state from previous ffmpeg_execute() invocations. */
+    ffmpeg_var_cleanup();
 
     /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
     static char _program_name[] = "ffmpeg";
