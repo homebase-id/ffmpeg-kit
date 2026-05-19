@@ -102,6 +102,12 @@
  * fftools_cmdutils.c. The per-tool values are set at the top of
  * ffmpeg_execute() below. See CUSTOMIZATION.md C10 for rationale. */
 
+/* C5: forward declaration so print_report() (earlier in file) can call
+ * forward_report() (defined alongside set_report_callback near EOF). */
+static void forward_report(uint64_t frame_number, float fps, float quality,
+                           int64_t total_size, int64_t pts,
+                           double bitrate, double speed);
+
 FILE *vstats_file;
 
 typedef struct BenchmarkTimeStamps {
