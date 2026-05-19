@@ -36,6 +36,8 @@
 
 #if defined(__ANDROID__)
 
+#include <stddef.h>
+
 #include "libavutil/log.h"
 #include "compat/android/binder.h"
 
