@@ -90,6 +90,19 @@ int ignore_unknown_streams = 0;
 int copy_unknown_streams = 0;
 int recast_media = 0;
 
+/* C11 helper: reset module-static option state between ffmpeg_execute()
+ * invocations. file_overwrite (set by `-y`) and no_file_overwrite (set
+ * by `-n`) persist across calls otherwise — first run with `-y`, second
+ * without `-y`, still acts as if `-y` was passed. */
+void ffmpeg_opt_var_cleanup(void)
+{
+    file_overwrite        = 0;
+    no_file_overwrite     = 0;
+    ignore_unknown_streams = 0;
+    copy_unknown_streams  = 0;
+    recast_media          = 0;
+}
+
 // this struct is passed as the optctx argument
 // to func_arg() for global options
 typedef struct GlobalOptionsContext {

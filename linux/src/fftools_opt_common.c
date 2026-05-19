@@ -71,6 +71,10 @@ enum show_muxdemuxers {
 static FILE *report_file;
 static int report_file_level = AV_LOG_DEBUG;
 
+/* C11 helper `opt_common_var_cleanup()` is defined below, after
+ * `warned_cfg`, so it can reference all three file-scope statics
+ * (`report_file`, `report_file_level`, `warned_cfg`) directly. */
+
 int show_license(void *optctx, const char *opt, const char *arg)
 {
 #if CONFIG_NONFREE
@@ -146,6 +150,23 @@ int show_license(void *optctx, const char *opt, const char *arg)
 }
 
 static int warned_cfg = 0;
+
+/* C11 helper: reset module-static state between ffmpeg_execute() calls.
+ * Without this, a second invocation that uses `-report` short-circuits
+ * inside init_report because report_file is already non-NULL from the
+ * first run — the new run silently has no log file. warned_cfg is
+ * cosmetic (suppresses the "configuration differs" warning across runs).
+ *
+ * Note: we do NOT fclose(report_file) here. If a real fd is open from a
+ * prior run we'd be double-closing on consecutive cleanups; the OS
+ * reclaims the fd when the host process exits. Resetting the pointer is
+ * enough for the next -report invocation to open fresh. */
+void opt_common_var_cleanup(void)
+{
+    report_file       = NULL;
+    report_file_level = AV_LOG_DEBUG;
+    warned_cfg        = 0;
+}
 
 #define INDENT        1
 #define SHOW_VERSION  2

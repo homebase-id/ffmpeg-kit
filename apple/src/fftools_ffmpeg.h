@@ -998,4 +998,11 @@ typedef void (*ffmpeg_report_callback)(int frameNumber, float fps,
                                        double speed);
 void set_report_callback(ffmpeg_report_callback fn);
 
+/* C11 — per-file global-state reset helpers, called from
+ * ffmpeg_var_cleanup() at the top of each ffmpeg_execute(). Each is
+ * defined in the file holding the static state it resets. See
+ * CUSTOMIZATION.md C11. */
+void ffmpeg_opt_var_cleanup(void);
+void opt_common_var_cleanup(void);
+
 #endif /* FFTOOLS_FFMPEG_H */

@@ -246,19 +246,28 @@ void term_init(void)
 
             tcsetattr (0, TCSANOW, &tty);
         }
-        SIGNAL(SIGQUIT, sigterm_handler); /* Quit (POSIX).  */
+        /* C6 finalization: SIGQUIT handler removed — host process owns
+         * signals when ffmpeg-kit runs inside chat-kmp/iOS/Android. */
     }
 #endif
 
-    SIGNAL(SIGINT , sigterm_handler); /* Interrupt (ANSI).    */
-    SIGNAL(SIGTERM, sigterm_handler); /* Termination (ANSI).  */
-#ifdef SIGXCPU
-    SIGNAL(SIGXCPU, sigterm_handler);
-#endif
-#ifdef SIGPIPE
-    signal(SIGPIPE, SIG_IGN); /* Broken pipe (POSIX). */
-#endif
+    /* C6 finalization: SIGINT/SIGTERM/SIGXCPU/SIGPIPE handlers removed.
+     *
+     * Stock ffmpeg is a standalone process and owns its own signal mask;
+     * ffmpeg-kit runs inside a host process (chat-kmp JVM, iOS app,
+     * Android app) and the host owns the signals. Registering our own
+     * handlers stomps on Crashlytics / Sentry crash reporters and any
+     * user-installed cleanup logic.
+     *
+     * The `received_sigterm` flag stays in place and is driven by
+     * ffmpeg's internal abort paths and `cancel_operation()` (when a
+     * future caller wires it up), so cancellation still works at the
+     * application layer.
+     *
+     * See CUSTOMIZATION.md C6. */
 #if HAVE_SETCONSOLECTRLHANDLER
+    /* Windows console handler retained — only fires for standalone
+     * Windows builds, not embedded use. */
     SetConsoleCtrlHandler((PHANDLER_ROUTINE) CtrlHandler, TRUE);
 #endif
 }
@@ -996,8 +1005,21 @@ static int64_t getmaxrss(void)
  * cancellation is handled at the coroutine layer instead. Symbol exists so
  * the wrapper layer (ffmpegkit.c, FFmpegKit.m) links. To implement real
  * cancellation, set a session-id-keyed atomic flag here and poll it inside
- * fftools_ffmpeg_sched.c::sch_wait. */
+ * fftools_ffmpeg_sched.c::sch_wait.
+ *
+ * First-call WARNING: a stub returning success is a silent footgun. If a
+ * future caller wires real cancel they'd burn hours debugging why nothing
+ * happens. Log once so the gap is loud. */
 void cancel_operation(long id) {
+    static atomic_int warned = 0;
+    int expected = 0;
+    if (atomic_compare_exchange_strong(&warned, &expected, 1)) {
+        av_log(NULL, AV_LOG_WARNING,
+               "Homebase ffmpeg-kit: cancel_operation(%ld) called but "
+               "is a no-op stub (chat-kmp cancels at coroutine layer). "
+               "See CUSTOMIZATION.md C4. This warning fires once per "
+               "process load.\n", id);
+    }
     (void)id;
 }
 
@@ -1005,10 +1027,25 @@ void cancel_operation(long id) {
  * Statistics API. The wrapper calls this at session start/end and the
  * symbol must resolve. forward_report() is intentionally NOT wired into
  * print_report(); add that if a future consumer needs progress events.
- * The ffmpeg_report_callback typedef lives in fftools_ffmpeg.h. */
+ * The ffmpeg_report_callback typedef lives in fftools_ffmpeg.h.
+ *
+ * First-call WARNING: stored callback is never invoked. Without this log
+ * a future consumer would think their callback fires and silently get
+ * zero events. */
 static __thread ffmpeg_report_callback report_callback = NULL;
 
 void set_report_callback(ffmpeg_report_callback fn) {
+    static atomic_int warned = 0;
+    int expected = 0;
+    if (fn != NULL &&
+        atomic_compare_exchange_strong(&warned, &expected, 1)) {
+        av_log(NULL, AV_LOG_WARNING,
+               "Homebase ffmpeg-kit: set_report_callback() stored a "
+               "non-NULL callback but the callback is never invoked "
+               "(forward_report wiring is not active). See "
+               "CUSTOMIZATION.md C5. This warning fires once per "
+               "process load.\n");
+    }
     report_callback = fn;
 }
 
@@ -1031,7 +1068,7 @@ void set_report_callback(ffmpeg_report_callback fn) {
  * Symptom this fixes: SIGSEGV at of_open+1339 → ffmpeg_parse_options →
  * ffmpeg_execute on the SECOND ffmpeg-kit invocation in the same process.
  */
-static void ffmpeg_var_cleanup(void)
+static void ffmpeg_var_cleanup(int argc, char **argv)
 {
     /* The signal / scheduler / exit-state vars are file-static within
      * this translation unit — accessible directly because this function
@@ -1057,6 +1094,46 @@ static void ffmpeg_var_cleanup(void)
     nb_decoders      = 0;
 
     vstats_file = NULL;
+
+    /* C11 follow-up: also reset terminal-state vars (only matter if
+     * stdin_interaction is enabled, which it isn't in embedded use,
+     * but cheap insurance). */
+    restore_tty = 0;
+    memset(&oldtty, 0, sizeof(oldtty));
+
+    /* C11 follow-up: delegate to per-file cleanup helpers for static
+     * state owned by other TUs. Prototypes in fftools_ffmpeg.h. */
+    ffmpeg_opt_var_cleanup();
+    opt_common_var_cleanup();
+
+#if defined(__ANDROID__)
+    /* C11 / U24 follow-up: scan argv for MediaCodec codec name.
+     * Sets the gate used by ffmpegkit_binder.c — see CUSTOMIZATION.md U24. */
+    extern int homebase_mediacodec_will_be_used;
+    homebase_mediacodec_will_be_used = 0;
+    for (int i = 1; i < argc; i++) {
+        if (argv[i] && strstr(argv[i], "_mediacodec")) {
+            homebase_mediacodec_will_be_used = 1;
+            break;
+        }
+    }
+#endif
+
+    /* C11 follow-up: warn if -print_graphs / -print_graphs_file is used,
+     * since our build stubs ff_graph_html/css resources to empty bytes
+     * (no bin2c pipeline). The fftools_resources/resman call path would
+     * produce empty or garbage output. See CUSTOMIZATION.md U23. */
+    for (int i = 1; i < argc; i++) {
+        if (argv[i] && (!strcmp(argv[i], "-print_graphs") ||
+                        !strcmp(argv[i], "-print_graphs_file"))) {
+            av_log(NULL, AV_LOG_WARNING,
+                   "Homebase ffmpeg-kit: -print_graphs uses resman "
+                   "resources that are stubbed empty in this build "
+                   "(ffmpegkit_resources.c). Output will be empty or "
+                   "invalid. See CUSTOMIZATION.md U23.\n");
+            break;
+        }
+    }
 }
 
 /* C1 — entry point: main() renamed to ffmpeg_execute() so the wrapper layer
@@ -1076,7 +1153,7 @@ int ffmpeg_execute(int argc, char **argv)
     }
 
     /* C11 — reset global state from previous ffmpeg_execute() invocations. */
-    ffmpeg_var_cleanup();
+    ffmpeg_var_cleanup(argc, argv);
 
     /* C10 — set per-tool globals. See CUSTOMIZATION.md. */
     static char _program_name[] = "ffmpeg";
