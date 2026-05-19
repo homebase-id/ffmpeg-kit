@@ -601,6 +601,11 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     static int64_t last_time = -1;
     static int first_report = 1;
     uint64_t nb_frames_dup = 0, nb_frames_drop = 0;
+    /* C5: capture per-tick stats for forward_report() at end of function.
+     * Stay at sensible defaults if there's no video output stream. */
+    uint64_t report_frame_number = 0;
+    float    report_fps           = 0.0f;
+    float    report_q             = -1.0f;
     int mins, secs, ms, us;
     int64_t hours;
     const char *hours_sign;
@@ -639,6 +644,10 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
             uint64_t frame_number = atomic_load(&ost->packets_written);
 
             fps = t > 1 ? frame_number / t : 0;
+            /* C5: snapshot for forward_report() at end of function. */
+            report_frame_number = frame_number;
+            report_fps          = fps;
+            report_q            = q;
             av_bprintf(&buf, "frame=%5"PRId64" fps=%3.*f q=%3.1f ",
                      frame_number, fps < 9.95, fps, q);
             av_bprintf(&buf_script, "frame=%"PRId64"\n", frame_number);
@@ -724,6 +733,10 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     mins %= 60;
 
     av_bprintf(&buf, " elapsed=%"PRId64":%02d:%02d.%02d", hours, mins, secs, ms / 10);
+
+    /* C5 — dispatch to wrapper's StatisticsCallback (chat-kmp progress UI). */
+    forward_report(report_frame_number, report_fps, report_q,
+                   total_size, pts, bitrate, speed);
 
     if (print_stats || is_last_report) {
         const char end = is_last_report ? '\n' : '\r';
@@ -1023,30 +1036,41 @@ void cancel_operation(long id) {
     (void)id;
 }
 
-/* C5 — set_report_callback: no-op stub. chat-kmp doesn't consume the
- * Statistics API. The wrapper calls this at session start/end and the
- * symbol must resolve. forward_report() is intentionally NOT wired into
- * print_report(); add that if a future consumer needs progress events.
- * The ffmpeg_report_callback typedef lives in fftools_ffmpeg.h.
+/* C5 — set_report_callback + forward_report: progress event dispatch
+ * to the wrapper layer's StatisticsCallback. arthenica's wrapper calls
+ * set_report_callback(ffmpegkit_statistics_callback_function) at JNI
+ * init; print_report() (in this file) calls forward_report() once per
+ * progress tick; forward_report dispatches to the stored callback.
  *
- * First-call WARNING: stored callback is never invoked. Without this log
- * a future consumer would think their callback fires and silently get
- * zero events. */
+ * `pts` is in microseconds; we convert to milliseconds (signed) for the
+ * Java/Swift side, matching arthenica's expected signature. The
+ * ffmpeg_report_callback typedef lives in fftools_ffmpeg.h.
+ *
+ * Without this wiring, ffmpeg-kit's StatisticsCallback never fires —
+ * chat-kmp's progress UI stays at 0% for the full transcode. */
 static __thread ffmpeg_report_callback report_callback = NULL;
 
 void set_report_callback(ffmpeg_report_callback fn) {
-    static atomic_int warned = 0;
-    int expected = 0;
-    if (fn != NULL &&
-        atomic_compare_exchange_strong(&warned, &expected, 1)) {
-        av_log(NULL, AV_LOG_WARNING,
-               "Homebase ffmpeg-kit: set_report_callback() stored a "
-               "non-NULL callback but the callback is never invoked "
-               "(forward_report wiring is not active). See "
-               "CUSTOMIZATION.md C5. This warning fires once per "
-               "process load.\n");
-    }
     report_callback = fn;
+}
+
+static void forward_report(uint64_t frame_number, float fps, float quality,
+                           int64_t total_size, int64_t pts,
+                           double bitrate, double speed)
+{
+    if (report_callback != NULL) {
+        double milliseconds = 0;
+        if (pts != AV_NOPTS_VALUE) {
+            milliseconds = ((double)FFABS64U(pts)) / 1000.0;
+        }
+        if (pts < 0) {
+            report_callback((int)frame_number, fps, quality, total_size,
+                            -milliseconds, bitrate, speed);
+        } else {
+            report_callback((int)frame_number, fps, quality, total_size,
+                            milliseconds, bitrate, speed);
+        }
+    }
 }
 
 /* C11 — reset global counters / pointers between ffmpeg_execute() calls.
