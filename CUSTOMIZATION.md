@@ -7,8 +7,8 @@ the new fftools snapshot. Update the checkboxes as work progresses.
 
 ## Current state snapshot (for next major bump)
 
-**Branch:** `upgrade/ffmpeg-8.x` at commit `630e790`
-(`fix(build/android): include <stddef.h> for NULL in binder stub`).
+**Branch:** `upgrade/ffmpeg-8.x` at commit `87e9e41`
+(`fix: reset global state between ffmpeg_execute() calls — C11`).
 
 **Tags relevant to this upgrade event:**
 - `pre-8.x-baseline` → `3f09956` — revert anchor on
@@ -18,17 +18,18 @@ the new fftools snapshot. Update the checkboxes as work progresses.
   `replay.sh` re-snapshot but BEFORE any Homebase customizations.
   Reference baseline for
   `git diff stock-n8.1.1..HEAD -- '*/fftools_*'`.
-- `n8.1.1-customized` → `630e790` — first commit producing green
-  CI on both platforms AND matching n7.1.3's chat-kmp Android
-  instrumented-test outcome (compressVideo_baselineStandard passes;
-  baselineLow crashes with the same pre-existing `of_open+1339`
-  SIGSEGV as n7). **Use this as the revert anchor before any n9.x
-  effort.**
+- `n8.1.1-customized` → `87e9e41` — first commit producing green
+  CI on both platforms AND **all 5 chat-kmp Android instrumented
+  tests passing** (5/5 completed, 0 failed). C11 fixed the
+  pre-existing re-entry crash that affected n7.1.3 and n6.0 too —
+  n8.1.1 now performs better than the prior baselines.
+  **Use this as the revert anchor before any n9.x effort.**
 
-**Working artifacts (Android validated, iOS pending colleague handoff):**
-- Android AAR: `c:/temp/Git/_upgrade_work/run47_aar/ffmpeg-kit-aar/ffmpeg-kit.aar`
+**Working artifacts (Android validated 5/5, iOS pending colleague handoff):**
+- Android AAR: `c:/temp/Git/_upgrade_work/run48_aar/ffmpeg-kit-aar/ffmpeg-kit.aar`
   (72 MB, all .so files in all 4 ABIs verified 16 KB-aligned, NDK r27d).
-  Workflow run #47 (id `26078008155`). Contains the binder no-op stub.
+  Workflow run #48 (id `26081869670`). Contains the binder no-op stub +
+  C11 re-entry cleanup.
 - iOS xcframework: `c:/temp/Git/_upgrade_work/run45_xcframework/`
   (85 MB, thin unsigned arm64 device slice — B1+B2 verified).
   Workflow run #45 (id `26060208346`). ~10 MB lighter than n7.1.3 —
@@ -37,11 +38,13 @@ the new fftools snapshot. Update the checkboxes as work progresses.
   ffmpegkit_binder.c (Android-only), so it's unaffected.
 
 **Acceptance criteria for declaring n8.1.1 "done":**
-1. chat-kmp video upload runs end-to-end via the new AAR on Android
-   (16 KB-page emulator + a 4 KB physical device for regression check).
-2. iOS xcframework drops into chat-kmp without needing the
-   `codesign --remove-signature` or `lipo -thin` workflow steps.
-3. chat-kmp HLS scenarios green on iOS — handed to macOS colleague.
+1. ✅ chat-kmp `CompressVideoAndroidInstrumentedTest` — all 5 tests
+   pass in a single suite run (no isolation needed) on the 16KB-page
+   emulator. **MET as of `87e9e41`.**
+2. ⏳ iOS xcframework drops into chat-kmp without needing the
+   `codesign --remove-signature` or `lipo -thin` workflow steps —
+   awaiting macOS colleague soak.
+3. ⏳ chat-kmp HLS scenarios green on iOS — same colleague.
 
 **Recovery commands if n8.1.1 needs to be abandoned:**
 ```
@@ -442,6 +445,85 @@ git diff pre-7.1.3-baseline HEAD -- '*/fftools_cmdutils.h' \
 ```
 
 to see the exact diff to replay.
+
+## C11 — Reset global state between `ffmpeg_execute()` invocations
+
+- [x] `ffmpeg_var_cleanup()` function added in `fftools_ffmpeg.c`,
+      called at the top of `ffmpeg_execute()` immediately after the C2
+      setjmp.
+
+**Status: REQUIRED for chat-kmp.** Without this, the SECOND `ffmpeg_execute()`
+invocation in the same process SIGSEGVs inside `of_open()` at +1339,
+because the n8 `ffmpeg_cleanup()` frees the global pointer arrays via
+`av_freep()` (NULLing the pointer) but does NOT reset the counter ints
+(`nb_input_files`, `nb_output_files`, `nb_filtergraphs`, `nb_decoders`).
+The next invocation iterates `for (i = 0; i < nb_input_files; i++)
+input_files[i]...` → NULL deref.
+
+This was the **same crash that affected n7.1.3 and n6.0**; we missed
+carrying the n6-era `ffmpeg_var_cleanup()` forward through the n6→n7
+upgrade. The chat-kmp `CompressVideoAndroidInstrumentedTest` docstring
+(lines 102-113) documented the symptom as "FFmpegKit's documented
+re-entry limitation when libx264 is invoked multiple times in the same
+process" — and added a workaround note suggesting one-test-at-a-time
+runs. C11 makes that workaround unnecessary; all 5 baseline tests
+now pass back-to-back.
+
+**What to do.** Define a static helper at the bottom of
+`fftools_ffmpeg.c` (just above `ffmpeg_execute`) that resets the
+n8-era surviving globals:
+
+```c
+static void ffmpeg_var_cleanup(void)
+{
+    received_sigterm     = 0;
+    received_nb_signals  = 0;
+    atomic_store(&transcode_init_done, 0);
+
+    ffmpeg_exited     = 0;
+    copy_ts_first_pts = AV_NOPTS_VALUE;
+    longjmp_value     = 0;
+
+    atomic_store(&nb_output_dumped, 0);
+    progress_avio = NULL;
+
+    input_files      = NULL;
+    nb_input_files   = 0;
+    output_files     = NULL;
+    nb_output_files  = 0;
+    filtergraphs     = NULL;
+    nb_filtergraphs  = 0;
+    decoders         = NULL;
+    nb_decoders      = 0;
+
+    vstats_file = NULL;
+}
+```
+
+Call `ffmpeg_var_cleanup()` right after the C2 setjmp block in
+`ffmpeg_execute()`, BEFORE C10's `program_name` assignment.
+
+The n6-era version reset ~10 more globals (`qp_histogram`,
+`decode_error_stat`, `nb_frames_dup`, `first_report`, `last_time`,
+`want_sdp`, `keyboard_last_time`, etc.) — n7/n8 moved all of those
+into the scheduler / `OutputFile` / `Statistics` structs, where they
+are owned by per-invocation allocations and freed on cleanup. Don't
+re-add resets for names that no longer exist; verify each n6 var
+still exists in n9.x before keeping it in C11.
+
+**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` around the
+`ffmpeg_var_cleanup` definition (line ~774).
+
+**Validation.** Run the full
+`CompressVideoAndroidInstrumentedTest` class without method
+filtering. All 5 tests must complete in one process without
+native crash:
+
+```
+./gradlew :homebase-api:connectedAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=id.homebase.api.video.CompressVideoAndroidInstrumentedTest
+# Expected: "Tests 5/5 completed. (0 skipped) (0 failed)"
+```
 
 ## C8 — License + changelog header comment
 
