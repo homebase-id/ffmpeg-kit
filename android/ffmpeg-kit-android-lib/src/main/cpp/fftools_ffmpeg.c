@@ -1069,18 +1069,20 @@ static void forward_report(uint64_t frame_number, float fps, float quality,
                            int64_t total_size, int64_t pts,
                            double bitrate, double speed)
 {
-    if (report_callback != NULL) {
-        double milliseconds = 0;
-        if (pts != AV_NOPTS_VALUE) {
-            milliseconds = ((double)FFABS64U(pts)) / 1000.0;
-        }
-        if (pts < 0) {
-            report_callback((int)frame_number, fps, quality, total_size,
-                            -milliseconds, bitrate, speed);
-        } else {
-            report_callback((int)frame_number, fps, quality, total_size,
-                            milliseconds, bitrate, speed);
-        }
+    if (report_callback == NULL)
+        return;
+    /* Skip ticks where ffmpeg has no pts info — they convey no progress
+     * and would oscillate the consumer's progress UI from N back to 0. */
+    if (pts == AV_NOPTS_VALUE)
+        return;
+
+    double milliseconds = ((double)FFABS64U(pts)) / 1000.0;
+    if (pts < 0) {
+        report_callback((int)frame_number, fps, quality, total_size,
+                        -milliseconds, bitrate, speed);
+    } else {
+        report_callback((int)frame_number, fps, quality, total_size,
+                        milliseconds, bitrate, speed);
     }
 }
 
