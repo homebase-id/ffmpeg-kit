@@ -7,8 +7,8 @@ the new fftools snapshot. Update the checkboxes as work progresses.
 
 ## Current state snapshot (for next major bump)
 
-**Branch:** `upgrade/ffmpeg-8.x` at commit `87e9e41`
-(`fix: reset global state between ffmpeg_execute() calls — C11`).
+**Branch:** `upgrade/ffmpeg-8.x` at commit `ca814ab`
+(`fix(build/android): skip set_thread_pool_max — host owns binder pool size`).
 
 **Tags relevant to this upgrade event:**
 - `pre-8.x-baseline` → `3f09956` — revert anchor on
@@ -18,11 +18,12 @@ the new fftools snapshot. Update the checkboxes as work progresses.
   `replay.sh` re-snapshot but BEFORE any Homebase customizations.
   Reference baseline for
   `git diff stock-n8.1.1..HEAD -- '*/fftools_*'`.
-- `n8.1.1-customized` → `87e9e41` — first commit producing green
-  CI on both platforms AND **all 5 chat-kmp Android instrumented
-  tests passing** (5/5 completed, 0 failed). C11 fixed the
-  pre-existing re-entry crash that affected n7.1.3 and n6.0 too —
-  n8.1.1 now performs better than the prior baselines.
+- `n8.1.1-customized` → `ca814ab` — chat-kmp validated end state.
+  **6/6 instrumented tests pass** (5 libx264 baselines + 1
+  `h264_mediacodec` smoke test). U24 v3 enables real MediaCodec HW
+  decode init on Android 15+ when argv signals MediaCodec usage,
+  while leaving software-only invocations alone. C11 also fixes the
+  pre-existing re-entry crash that affected n7.1.3 and n6.0.
   **Use this as the revert anchor before any n9.x effort.**
 
 **Working artifacts (Android validated 5/5, iOS pending colleague handoff):**
@@ -809,35 +810,46 @@ lives in the build scripts going forward.
       file is `__ANDROID__`-guarded internally. Sibling
       `#include "binder.h"` rewritten to `"compat/android/binder.h"`
       (the U21-installed copy).
-- **Follow-up — replace with no-op stub.** The upstream
-      implementation SIGABRTs deep inside
-      `ABinderProcess_startThreadPool()` when called from chat-kmp's
-      instrumented test process on a stock x86_64 Android 36
-      emulator — likely because instrumented test hosts aren't
-      proper binder clients. The crash happens **before** any actual
-      ffmpeg work, killing even the baseline libx264
-      software-encoding test that PASSED on n7.1.3 (n7 had no
-      binder init at all). Tombstone:
-      ```
-      F libc    : Fatal signal 6 (SIGABRT) ... tid (pool-3-thread-1)
-      F DEBUG   : #06 libffmpegkit.so (android_binder_threadpool_init_if_required+220)
-      F DEBUG   : #07 libffmpegkit.so (ffmpeg_execute+351)
-      ```
-      Replaced `ffmpegkit_binder.c` with a no-op stub:
-      `android_binder_threadpool_init_if_required` just logs and
-      returns. chat-kmp uses libx264/aac (software) for baseline
-      tests; HW MediaCodec (`-c:v h264_mediacodec`) may not work on
-      Android 15+ devices without the real init. Revisit if/when HW
-      decode is needed.
-- **Maintenance note:** `ffmpegkit_binder.c` is now a Homebase
-      customization (no-op replacement), NOT vendored from FFmpeg.
-      `replay.sh` doesn't touch it. **Do not** blindly re-copy from
-      upstream `compat/android/binder.c` on the next FFmpeg bump —
-      that would re-introduce the crash. If a future cycle needs HW
-      MediaCodec on Android 15+, gate the real init on actual
-      MediaCodec usage rather than dropping the no-op.
+- **Follow-up — replace with no-op stub (v2, superseded).** The
+      upstream init aborts before any ffmpeg work and kills even
+      libx264-only tests, so an interim version was just
+      `void android_binder_threadpool_init_if_required(void) { ... }`
+      → no-op. Safe but lost MediaCodec functionality.
+- **Final fix — argv-gated real init (v3).** Restored the upstream
+      init logic with TWO modifications:
+      1. **Argv gate.** C11 `ffmpeg_var_cleanup()` scans argv for the
+         `_mediacodec` substring (catches `h264_mediacodec`,
+         `hevc_mediacodec`, etc.) and sets the extern
+         `homebase_mediacodec_will_be_used`. If 0, the init returns
+         early — software-only invocations skip binder entirely.
+      2. **Skip `set_thread_pool_max(THREAD_POOL_SIZE=1)`.** Upstream
+         tries to cap the pool at one worker, but the host process
+         (chat-kmp app, instrumented test runner) has almost always
+         ALREADY started a binder pool with size > 1 via the Android
+         framework. libbinder refuses to shrink an already-started
+         pool and aborts:
+         ```
+         F ProcessState: Binder threadpool cannot be shrunk after starting
+         #09 ProcessState::setThreadPoolMaxThreadCount+145
+         #10 ABinderProcess_setThreadPoolMaxThreadCount+47
+         #11 ffmpegkit_binder.c (android_binder_threadpool_init_if_required+280)
+         ```
+         Skipping is safe — the existing pool size handles MediaCodec
+         callbacks fine. `start_thread_pool()` is still invoked and
+         is idempotent.
+      Validated by chat-kmp's `compressVideo_h264MediaCodecSmoke`
+      test: 6/6 instrumented tests pass, libx264 path skips binder
+      entirely, h264_mediacodec path runs the real init and encodes.
+- **Maintenance note:** `ffmpegkit_binder.c` is a Homebase
+      customization (gated init + no set_thread_pool_max), NOT
+      vendored from FFmpeg. `replay.sh` doesn't touch it. **Do not**
+      blindly re-copy from upstream `compat/android/binder.c` on the
+      next FFmpeg bump — that would re-introduce both bugs. The two
+      modifications need to travel forward verbatim.
 - **Commits:** `8428c70` (initial copy) + `0dd16d7` (include path)
-      + `b35acba` (no-op stub) + `630e790` (`<stddef.h>` for NULL).
+      + `b35acba` (no-op stub v2) + `630e790` (`<stddef.h>` for NULL)
+      + `0b151d7` (argv-gated real init v3) + `ca814ab` (skip
+      `set_thread_pool_max`).
 
 ### U25 — Apple wrapper missing zlib link
 
