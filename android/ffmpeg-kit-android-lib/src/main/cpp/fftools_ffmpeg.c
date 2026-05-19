@@ -1054,7 +1054,12 @@ void cancel_operation(long id) {
  *
  * Without this wiring, ffmpeg-kit's StatisticsCallback never fires —
  * chat-kmp's progress UI stays at 0% for the full transcode. */
-static __thread ffmpeg_report_callback report_callback = NULL;
+/* PROCESS-GLOBAL (not __thread). arthenica's JNI_OnLoad calls
+ * set_report_callback on the main thread; ffmpeg_execute runs on a
+ * worker thread. A thread-local would mean the worker's slot stays
+ * NULL and forward_report() silently no-ops. n6.0 had this as a
+ * file-scope global; we match it. */
+static ffmpeg_report_callback report_callback = NULL;
 
 void set_report_callback(ffmpeg_report_callback fn) {
     report_callback = fn;
