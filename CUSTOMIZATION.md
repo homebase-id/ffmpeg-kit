@@ -7,8 +7,8 @@ the new fftools snapshot. Update the checkboxes as work progresses.
 
 ## Current state snapshot (for next major bump)
 
-**Branch:** `upgrade/ffmpeg-8.x` at commit `cc8d56e`
-(`fix(build/apple): stub resman resources + link zlib — U23/U25 for iOS`).
+**Branch:** `upgrade/ffmpeg-8.x` at commit `630e790`
+(`fix(build/android): include <stddef.h> for NULL in binder stub`).
 
 **Tags relevant to this upgrade event:**
 - `pre-8.x-baseline` → `3f09956` — revert anchor on
@@ -18,18 +18,23 @@ the new fftools snapshot. Update the checkboxes as work progresses.
   `replay.sh` re-snapshot but BEFORE any Homebase customizations.
   Reference baseline for
   `git diff stock-n8.1.1..HEAD -- '*/fftools_*'`.
-- `n8.1.1-customized` → `cc8d56e` — first commit producing green
-  CI on both platforms with all customizations applied. **Use this
-  as the revert anchor before any n9.x effort.**
+- `n8.1.1-customized` → `630e790` — first commit producing green
+  CI on both platforms AND matching n7.1.3's chat-kmp Android
+  instrumented-test outcome (compressVideo_baselineStandard passes;
+  baselineLow crashes with the same pre-existing `of_open+1339`
+  SIGSEGV as n7). **Use this as the revert anchor before any n9.x
+  effort.**
 
-**Working artifacts (both platforms green, awaiting chat-kmp soak):**
-- Android AAR: `c:/temp/Git/_upgrade_work/run43_aar/ffmpeg-kit.aar`
+**Working artifacts (Android validated, iOS pending colleague handoff):**
+- Android AAR: `c:/temp/Git/_upgrade_work/run47_aar/ffmpeg-kit-aar/ffmpeg-kit.aar`
   (72 MB, all .so files in all 4 ABIs verified 16 KB-aligned, NDK r27d).
-  Workflow run #43 (id `26056303546`).
+  Workflow run #47 (id `26078008155`). Contains the binder no-op stub.
 - iOS xcframework: `c:/temp/Git/_upgrade_work/run45_xcframework/`
   (85 MB, thin unsigned arm64 device slice — B1+B2 verified).
   Workflow run #45 (id `26060208346`). ~10 MB lighter than n7.1.3 —
-  libpostproc removal accounts for most of the drop.
+  libpostproc removal accounts for most of the drop. **NOTE:** the
+  xcframework predates the binder no-op stub, but iOS doesn't compile
+  ffmpegkit_binder.c (Android-only), so it's unaffected.
 
 **Acceptance criteria for declaring n8.1.1 "done":**
 1. chat-kmp video upload runs end-to-end via the new AAR on Android
@@ -708,24 +713,49 @@ lives in the build scripts going forward.
       build.
 - **Commits:** `8428c70` (Android) + `cc8d56e` (Apple)
 
-### U24 — compat/android/binder.c not compiled into wrapper
+### U24 — compat/android/binder.c not compiled into wrapper (then stubbed)
 
-- [x] Fixed
+- [x] Fixed (with a runtime-behavior follow-up — see below)
 - **Symptom (Android run #41):** link fails with undefined
       `android_binder_threadpool_init_if_required`.
 - **Root cause:** the function is defined in
       `compat/android/binder.c` (sibling to the binder.h we
       installed in U21). The wrapper build needs the .c too, not
       just the header. n7 didn't have any code in this file.
-- **Fix:** copy `compat/android/binder.c` into the wrapper cpp dir
-      as `ffmpegkit_binder.c`, add to `MY_SRC_FILES`. The file is
-      `__ANDROID__`-guarded internally; standalone deps (`dlfcn.h`,
-      `libavutil/log.h`). Then point its sibling `#include "binder.h"`
-      at `compat/android/binder.h` (the installed copy).
-- **Maintenance note:** binder.c isn't part of fftools, so
-      `replay.sh` doesn't touch it. Future upgrades should re-copy
-      from `compat/android/binder.c` if it changes upstream.
-- **Commits:** `8428c70` + `0dd16d7` (the include path fix)
+- **Initial fix:** copy `compat/android/binder.c` into the wrapper
+      cpp dir as `ffmpegkit_binder.c`, add to `MY_SRC_FILES`. The
+      file is `__ANDROID__`-guarded internally. Sibling
+      `#include "binder.h"` rewritten to `"compat/android/binder.h"`
+      (the U21-installed copy).
+- **Follow-up — replace with no-op stub.** The upstream
+      implementation SIGABRTs deep inside
+      `ABinderProcess_startThreadPool()` when called from chat-kmp's
+      instrumented test process on a stock x86_64 Android 36
+      emulator — likely because instrumented test hosts aren't
+      proper binder clients. The crash happens **before** any actual
+      ffmpeg work, killing even the baseline libx264
+      software-encoding test that PASSED on n7.1.3 (n7 had no
+      binder init at all). Tombstone:
+      ```
+      F libc    : Fatal signal 6 (SIGABRT) ... tid (pool-3-thread-1)
+      F DEBUG   : #06 libffmpegkit.so (android_binder_threadpool_init_if_required+220)
+      F DEBUG   : #07 libffmpegkit.so (ffmpeg_execute+351)
+      ```
+      Replaced `ffmpegkit_binder.c` with a no-op stub:
+      `android_binder_threadpool_init_if_required` just logs and
+      returns. chat-kmp uses libx264/aac (software) for baseline
+      tests; HW MediaCodec (`-c:v h264_mediacodec`) may not work on
+      Android 15+ devices without the real init. Revisit if/when HW
+      decode is needed.
+- **Maintenance note:** `ffmpegkit_binder.c` is now a Homebase
+      customization (no-op replacement), NOT vendored from FFmpeg.
+      `replay.sh` doesn't touch it. **Do not** blindly re-copy from
+      upstream `compat/android/binder.c` on the next FFmpeg bump —
+      that would re-introduce the crash. If a future cycle needs HW
+      MediaCodec on Android 15+, gate the real init on actual
+      MediaCodec usage rather than dropping the no-op.
+- **Commits:** `8428c70` (initial copy) + `0dd16d7` (include path)
+      + `b35acba` (no-op stub) + `630e790` (`<stddef.h>` for NULL).
 
 ### U25 — Apple wrapper missing zlib link
 
