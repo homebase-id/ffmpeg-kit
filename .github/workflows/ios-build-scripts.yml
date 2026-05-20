@@ -1,31 +1,11 @@
 name: ios build scripts
 
 on:
+  # Homebase fork: this is the upstream multi-OS iOS validation matrix.
+  # The fork ships the xcframework via build-ios.yml (which now runs on
+  # PRs). Auto push/PR triggers removed here to keep `main` a meaningful
+  # signal — dispatch on demand. See CUSTOMIZATION.md B3.
   workflow_dispatch:
-  push:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/ios-build-scripts.yml'
-      - 'apple/**'
-      - '!apple/README.md'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'apple.sh'
-      - 'ios.sh'
-  pull_request:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/ios-build-scripts.yml'
-      - 'apple/**'
-      - '!apple/README.md'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'apple.sh'
-      - 'ios.sh'
 
 jobs:
   build-main-on-macos-latest:

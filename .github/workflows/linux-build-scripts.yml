@@ -1,26 +1,11 @@
 name: linux build scripts
 
 on:
-  push:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/linux-build-scripts.yml'
-      - 'linux/**'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'linux.sh'
-  pull_request:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/linux-build-scripts.yml'
-      - 'linux/**'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'linux.sh'
+  # Homebase fork: Linux ffmpeg-kit has no consumer (chat-kmp desktop
+  # shells out to a standalone ffmpeg binary, not this library). Auto
+  # push/PR triggers removed to keep `main` a meaningful signal — run
+  # on demand if Linux is ever needed. See CUSTOMIZATION.md B3.
+  workflow_dispatch:
 
 jobs:
   build-main-on-ubuntu-2204:

@@ -3,8 +3,12 @@ name: ios build
 on:
   workflow_dispatch:
   push:
-    tags: 
+    tags:
       - '*'
+  # Homebase fork: this produces the SHIPPED iOS xcframework, so it
+  # gates PRs (the "iOS" that actually matters). The broader multi-OS
+  # ios-build-scripts.yml is dispatch-only.
+  pull_request:
 
 jobs:
   build-ios-main-on-macos:

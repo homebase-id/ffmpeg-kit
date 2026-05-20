@@ -3,8 +3,12 @@ name: android build
 on:
   workflow_dispatch:
   push:
-    tags: 
+    tags:
       - '*'
+  # Homebase fork: this r27d build produces the SHIPPED Android AAR, so
+  # it gates PRs (it's the "Android r27d" that actually matters). The
+  # broader multi-NDK android-build-scripts.yml is dispatch-only.
+  pull_request:
 
 jobs:
   build-android-main-on-linux:
