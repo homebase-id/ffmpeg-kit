@@ -23,13 +23,17 @@ jobs:
       - name: set up xcode
         run: echo "export DEVELOPER_DIR=/Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer" > ~/.xcode.for.ffmpeg.kit.sh
       - name: run the build script
-        # --disable-lib-libaom (U13) + --disable-lib-sdl (U14)
-        # + --disable-lib-libvpx (U17): defensive. iOS doesn't currently
-        # enable these (no --full), but the constraints travel with the
-        # workflow if it ever switches to --full. libxml2 (U18) is an
-        # NDK-r27-Android-only collision; iOS uses Xcode toolchain and
-        # isn't affected.
-        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --disable-arm64e --enable-gpl --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --enable-ios-zlib --enable-openssl --enable-zimg --enable-x264
+        # B3 (size trim): minimal external-library set, matching the
+        # Android build. chat-kmp needs only libx264 (SW H.264 encode) +
+        # zlib (PNG/gzip/FFmpeg internals) + native built-in decoders/
+        # muxers. Dropped from the prior command:
+        #   --enable-openssl : TLS unused (chat-kmp feeds local files)
+        #   --enable-zimg    : high-quality scale unused (-vf scale uses
+        #                      libswscale, always built)
+        #   --disable-lib-*  : no-ops now (no --full, nothing to disable)
+        # iOS already used explicit --enable flags (no --full), so the
+        # --full disable-hang that bit Android never applied here.
+        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --disable-arm64e --enable-gpl --enable-ios-zlib --enable-x264
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *
