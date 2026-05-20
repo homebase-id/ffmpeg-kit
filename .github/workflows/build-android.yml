@@ -65,9 +65,17 @@ jobs:
         # chat-kmp only uses libx264 (SW H.264 encode) + native built-in
         # decoders/muxers + h264_mediacodec (HW, a configure flag not a
         # lib). Everything below is dead weight for chat-kmp's pipeline.
-        # The conservative-keep set (x264, openssl, gnutls, libxml2, zimg,
-        # libiconv, gif/jpeg) is left for B3 Step 2. See CUSTOMIZATION.md B3.
-        run: ./android.sh --full --enable-gpl --disable-arm-v7a --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-tesseract --disable-lib-libass --disable-lib-fontconfig --disable-lib-freetype --disable-lib-fribidi --disable-lib-rubberband --disable-lib-soxr --disable-lib-chromaprint --disable-lib-libvidstab --disable-lib-lame --disable-lib-shine --disable-lib-twolame --disable-lib-vo-amrwbenc --disable-lib-opencore-amr --disable-lib-libilbc --disable-lib-speex --disable-lib-opus --disable-lib-libvorbis --disable-lib-libtheora --disable-lib-libwebp --disable-lib-kvazaar --disable-lib-x265 --disable-lib-xvidcore --disable-lib-dav1d --disable-lib-snappy
+        #
+        # gnutls + gmp pulled forward from Step 2: the full-feature build
+        # hangs 4h+ on gnutls's configure/self-test on the CI runner.
+        # chat-kmp feeds ffmpeg local files only (no https:// inputs;
+        # HLS AES-128 uses ffmpeg's built-in crypto + a local key file),
+        # so TLS isn't needed. openh264 is redundant — we encode H.264
+        # via libx264 and decode via FFmpeg's native h264 decoder.
+        #
+        # Conservative-keep set still under test in Step 2: x264, libxml2,
+        # zimg, libiconv, gif/jpeg. See CUSTOMIZATION.md B3.
+        run: ./android.sh --full --enable-gpl --disable-arm-v7a --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-tesseract --disable-lib-libass --disable-lib-fontconfig --disable-lib-freetype --disable-lib-fribidi --disable-lib-rubberband --disable-lib-soxr --disable-lib-chromaprint --disable-lib-libvidstab --disable-lib-lame --disable-lib-shine --disable-lib-twolame --disable-lib-vo-amrwbenc --disable-lib-opencore-amr --disable-lib-libilbc --disable-lib-speex --disable-lib-opus --disable-lib-libvorbis --disable-lib-libtheora --disable-lib-libwebp --disable-lib-kvazaar --disable-lib-x265 --disable-lib-xvidcore --disable-lib-dav1d --disable-lib-snappy --disable-lib-gnutls --disable-lib-gmp --disable-lib-openh264
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}
