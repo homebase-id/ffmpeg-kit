@@ -61,21 +61,29 @@ jobs:
         # removing the host libxml2.so that ships with NDK r27d. The
         # cross-compiled libxml2 builds normally.
         #
-        # B3 Step 1 (size trim): disable the clearly-unused external libs.
-        # chat-kmp only uses libx264 (SW H.264 encode) + native built-in
-        # decoders/muxers + h264_mediacodec (HW, a configure flag not a
-        # lib). Everything below is dead weight for chat-kmp's pipeline.
+        # B3 (size trim): build the MINIMAL external-library set via
+        # explicit --enable flags instead of `--full` minus a long
+        # --disable-lib list.
         #
-        # gnutls + gmp pulled forward from Step 2: the full-feature build
-        # hangs 4h+ on gnutls's configure/self-test on the CI runner.
-        # chat-kmp feeds ffmpeg local files only (no https:// inputs;
-        # HLS AES-128 uses ffmpeg's built-in crypto + a local key file),
-        # so TLS isn't needed. openh264 is redundant — we encode H.264
-        # via libx264 and decode via FFmpeg's native h264 decoder.
+        # Why not `--full --disable-lib-*`: that approach hangs 4h+ on
+        # the CI runner. It's the U18 pattern — disabling a library that
+        # FFmpeg's configure probes for sends configure into an
+        # auto-detect / pkg-config retry loop (U18 saw the same with
+        # --disable-lib-libxml2). Rather than bisect 28 disables across
+        # 70-min builds, flip to the iOS strategy: don't use --full at
+        # all, enable only what chat-kmp needs.
         #
-        # Conservative-keep set still under test in Step 2: x264, libxml2,
-        # zimg, libiconv, gif/jpeg. See CUSTOMIZATION.md B3.
-        run: ./android.sh --full --enable-gpl --disable-arm-v7a --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-tesseract --disable-lib-libass --disable-lib-fontconfig --disable-lib-freetype --disable-lib-fribidi --disable-lib-rubberband --disable-lib-soxr --disable-lib-chromaprint --disable-lib-libvidstab --disable-lib-lame --disable-lib-shine --disable-lib-twolame --disable-lib-vo-amrwbenc --disable-lib-opencore-amr --disable-lib-libilbc --disable-lib-speex --disable-lib-opus --disable-lib-libvorbis --disable-lib-libtheora --disable-lib-libwebp --disable-lib-kvazaar --disable-lib-x265 --disable-lib-xvidcore --disable-lib-dav1d --disable-lib-snappy --disable-lib-gnutls --disable-lib-gmp --disable-lib-openh264
+        # chat-kmp's ffmpeg surface:
+        #   - x264                 → software H.264 encode (only ext encoder)
+        #   - android-media-codec  → HW H.264 encode/decode (h264_mediacodec)
+        #   - android-zlib         → zlib (PNG, gzip, FFmpeg internals)
+        #   - native built-in decoders (h264/hevc/vp8/vp9/av1/mpeg4/aac/
+        #     mp3/...) — always compiled, need no external lib
+        #   - native muxers/demuxers (mp4/mov/hls/mpegts/image2), scale
+        #     (libswscale), AES-128 crypto, aac_adtstoasc BSF — built-in
+        # TLS (gnutls/openssl) intentionally absent: chat-kmp feeds
+        # ffmpeg local files only. See CUSTOMIZATION.md B3.
+        run: ./android.sh --enable-gpl --disable-arm-v7a --enable-x264 --enable-android-media-codec --enable-android-zlib
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}
