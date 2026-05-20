@@ -60,7 +60,14 @@ jobs:
         # Note: libxml2 (U18) is handled at the NDK setup step above by
         # removing the host libxml2.so that ships with NDK r27d. The
         # cross-compiled libxml2 builds normally.
-        run: ./android.sh --full --enable-gpl --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-arm-v7a
+        #
+        # B3 Step 1 (size trim): disable the clearly-unused external libs.
+        # chat-kmp only uses libx264 (SW H.264 encode) + native built-in
+        # decoders/muxers + h264_mediacodec (HW, a configure flag not a
+        # lib). Everything below is dead weight for chat-kmp's pipeline.
+        # The conservative-keep set (x264, openssl, gnutls, libxml2, zimg,
+        # libiconv, gif/jpeg) is left for B3 Step 2. See CUSTOMIZATION.md B3.
+        run: ./android.sh --full --enable-gpl --disable-arm-v7a --disable-lib-srt --disable-lib-libaom --disable-lib-sdl --disable-lib-libvpx --disable-lib-tesseract --disable-lib-libass --disable-lib-fontconfig --disable-lib-freetype --disable-lib-fribidi --disable-lib-rubberband --disable-lib-soxr --disable-lib-chromaprint --disable-lib-libvidstab --disable-lib-lame --disable-lib-shine --disable-lib-twolame --disable-lib-vo-amrwbenc --disable-lib-opencore-amr --disable-lib-libilbc --disable-lib-speex --disable-lib-opus --disable-lib-libvorbis --disable-lib-libtheora --disable-lib-libwebp --disable-lib-kvazaar --disable-lib-x265 --disable-lib-xvidcore --disable-lib-dav1d --disable-lib-snappy
       - name: Upload AAR as workflow artifact
         uses: actions/upload-artifact@v7
         if: ${{ always() }}
