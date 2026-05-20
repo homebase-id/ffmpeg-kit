@@ -37,7 +37,9 @@ jobs:
         #   --disable-lib-*  : no-ops now (no --full, nothing to disable)
         # iOS already used explicit --enable flags (no --full), so the
         # --full disable-hang that bit Android never applied here.
-        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --disable-arm64e --enable-gpl --enable-ios-zlib --enable-x264
+        # --enable-ios-videotoolbox: h264_videotoolbox HW encoder — 3-10x
+        #   faster than libx264 on device, near-zero CPU/battery.
+        run: PATH="/usr/local/opt/bison/bin:$PATH" XML_CATALOG_FILES="/usr/local/etc/xml/catalog" ./ios.sh --xcframework --disable-arm64e --enable-gpl --enable-ios-zlib --enable-x264 --enable-ios-videotoolbox
       - name: package zip
         working-directory: ./prebuilt/bundle-apple-xcframework-ios/
         run: zip -r ffmpegkit-bundled.xcframework.zip *
