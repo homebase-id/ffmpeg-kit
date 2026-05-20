@@ -56,10 +56,11 @@ git checkout -b upgrade/ffmpeg-7.1.3-hotfix pre-8.x-baseline
 ```
 
 **Things deliberately deferred to a separate effort:**
-- **B3 — size trim** via `--disable-everything` + per-feature enables.
-  Documented; not started. Estimated 25–35 MB AAR (3× shrink). Even
-  more attractive now that we have n8's larger fftools surface area
-  (textformat + graph + resources subtrees added).
+- **B3 — size trim. DONE (2026-05-20).** Switched both platforms from
+  `--full` to a minimal explicit-`--enable` set (x264 + media-codec +
+  zlib on Android; x264 + zlib on iOS). Android AAR 75 MB → 35 MB.
+  See the B3 section below for the full writeup and the `--full`
+  disable-hang lesson.
 - **Linux/macOS/tvOS build-script validation.** `*-build-scripts.yml`
   workflows currently only auto-fire on push to `main`. Add
   `workflow_dispatch:` and validate before merge.
@@ -1553,13 +1554,67 @@ source customization, no FFmpeg API work. Likely a few flag tweaks in
 
 ## B3 — AAR / xcframework size: trim to chat-kmp's actual codec set
 
-- [ ] Switch from `--full --enable-gpl` (kitchen sink) to a
-      `--disable-everything` + per-feature-enable build list scoped
-      to what chat-kmp actually uses.
+- [x] **DONE (2026-05-20).** Switched from `--full` (kitchen sink, ~25
+      external libs) to a minimal explicit-`--enable` library set.
+      Android AAR **75 MB → 35 MB** (53% cut, now smaller than the old
+      v6.1 build's 51 MB). iOS xcframework zip **88 MB → 77 MB**.
+      All 11 chat-kmp instrumented tests still green.
 
-**Why:** the n7.1.3 AAR ships at ~86 MB (up from ~51 MB on n6.0,
-driven by enabling postproc + n7 feature expansion). chat-kmp's
-actual codec needs from the integration survey:
+**Final flag set (what shipped):**
+```sh
+# .github/workflows/build-android.yml
+./android.sh --enable-gpl --disable-arm-v7a \
+    --enable-x264 --enable-android-media-codec --enable-android-zlib
+
+# .github/workflows/build-ios.yml
+./ios.sh --xcframework --disable-arm64e --enable-gpl \
+    --enable-ios-zlib --enable-x264
+```
+
+**Key lesson — do NOT use `--full` + a long `--disable-lib-*` list.**
+The first attempt (`--full` minus ~28 `--disable-lib-*` flags) hung
+the CI build **4h+** — twice. It's the same root cause as U18:
+disabling a library that FFmpeg's configure probes for via pkg-config
+sends configure into an auto-detect / retry loop. Bisecting 28 flags
+across 70-min builds is not viable. The fix is to flip the polarity:
+don't enable everything-then-subtract; enable only the few libs needed.
+This is also how the iOS build always worked (no `--full`), which is
+why iOS never hit the hang.
+
+**Why only these libs:** chat-kmp's pipeline is *decode anything →
+re-encode to H.264/AAC*. The only external ENCODER it needs is
+**libx264**. Everything else it touches is a FFmpeg built-in:
+- Native decoders (h264, hevc, vp8, vp9, av1, mpeg4, aac, mp3, …) are
+  always compiled — they need no external lib. Common-format
+  recompression is fully preserved. (AV1 decode falls back from
+  dav1d to the slower native decoder.)
+- Native muxers/demuxers (mp4, mov, hls, mpegts, image2), `scale`
+  (libswscale), AES-128 crypto, `aac_adtstoasc` BSF — all built-in.
+- `android-media-codec` / VideoToolbox HW paths are configure flags,
+  not external libs.
+- TLS (gnutls/openssl) intentionally absent — chat-kmp feeds ffmpeg
+  local files only; HLS AES-128 uses ffmpeg's built-in crypto + a
+  local key file.
+
+**Original (NOT taken) approach** — component-level
+`--disable-everything` + `--enable-decoder=…/--enable-muxer=…`. Would
+shrink further (drops unused internal codecs inside libavcodec) but is
+much riskier (every missing component breaks a format at runtime) and
+unnecessary: the library trim alone beat the size goal. Revisit only
+if a future consumer needs <35 MB. The original suggested flag set is
+preserved in git history of this file if needed.
+
+**Why the n8 AAR was 75 MB in the first place** (vs n6.1's 51 MB,
+both `--full`): FFmpeg code growth (n6→n8 scheduler/textformat/graph),
+NDK r25b→r27d (clang 18), and 16 KB page-size LOAD-segment padding
+(required for Android 15, non-negotiable). The trim removes external
+libs; the remaining ~24 MB of n6→n8 growth is inherent.
+
+---
+
+### Historical survey (kept for reference)
+
+chat-kmp's actual codec needs from the integration survey:
 
 | Need | Used for |
 |---|---|
@@ -1620,8 +1675,9 @@ this in a focused follow-up PR.
       unsigned.
 - B2: `lipo -info <slice>/ffmpegkit.framework/ffmpegkit` reports a
       single architecture per slice.
-- B3: produced AAR ≤ 35 MB; chat-kmp's full test suite still passes;
-      manual smoke (video upload + HLS encryption) green.
+- B3: DONE — AAR 35 MB (≤ target); 11/11 chat-kmp instrumented tests
+      pass incl. compress (libx264 + h264_mediacodec), HLS segment,
+      HLS AES-128 encrypt, HLS→MP4 remux, progress stats, version.
 - chat-kmp can drop its signature-strip script and its fat-binary
   workaround.
 
