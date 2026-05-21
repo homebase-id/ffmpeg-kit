@@ -19,6 +19,7 @@
 
 #include <pthread.h>
 #include <stdatomic.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -134,8 +135,6 @@ int ffmpeg_execute(int argc, char **argv);
 
 static const char *avutil_log_get_level_str(int level) {
     switch (level) {
-    case AV_LOG_STDERR:
-        return "stderr";
     case AV_LOG_QUIET:
         return "quiet";
     case AV_LOG_DEBUG:
@@ -453,8 +452,7 @@ void ffmpegkit_log_callback_function(void *ptr, int level, const char* format, v
     }
     int activeLogLevel = av_log_get_level();
 
-    // AV_LOG_STDERR logs are always redirected
-    if ((activeLogLevel == AV_LOG_QUIET && level != AV_LOG_STDERR) || (level > activeLogLevel)) {
+    if (level > activeLogLevel) {
         return;
     }
 

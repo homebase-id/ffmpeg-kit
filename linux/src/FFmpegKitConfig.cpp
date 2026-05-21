@@ -17,6 +17,7 @@
  * along with FFmpegKit.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <cstring>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <pthread.h>
@@ -291,8 +292,6 @@ static void callbackNotify() {
 
 static const char *avutil_log_get_level_str(int level) {
     switch (level) {
-    case AV_LOG_STDERR:
-        return "stderr";
     case AV_LOG_QUIET:
         return "quiet";
     case AV_LOG_DEBUG:

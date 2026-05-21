@@ -12,7 +12,13 @@ ${SED_INLINE} 's|gitlab.com/gnutls/cligen|github.com/arthenica/cligen|g' "${BASE
 ${SED_INLINE} 's|gitlab.com/redhat-crypto/tests/interop|github.com/arthenica/redhat-crypto-tests-interop|g' "${BASEDIR}"/src/"${LIB_NAME}"/.gitmodules || return 1
 
 # UPDATE BUILD FLAGS
-export CFLAGS="$(get_cflags ${LIB_NAME}) -I${LIB_INSTALL_BASE}/libiconv/include"
+# U15-family fix: gnutls 3.7.9 bundles a gnulib that uses tzfree/tzalloc/
+# mktime_z without proper feature detection. Android API 26+ has these but
+# the gnulib auto-detect doesn't recognize bionic. Clang 18 (NDK r27d)
+# errors on the resulting implicit declarations + int-to-pointer conversion.
+# Relax both warnings; these calls fall back to the legacy timezone path
+# at runtime on platforms where the symbols are missing.
+export CFLAGS="$(get_cflags ${LIB_NAME}) -I${LIB_INSTALL_BASE}/libiconv/include -Wno-implicit-function-declaration -Wno-int-conversion"
 export CXXFLAGS=$(get_cxxflags "${LIB_NAME}")
 export LDFLAGS="$(get_ldflags ${LIB_NAME}) -L${LIB_INSTALL_BASE}/libiconv/lib"
 

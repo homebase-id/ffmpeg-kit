@@ -59,7 +59,11 @@ x86)
   ASM_OPTIONS=" --disable-neon --disable-asm --disable-inline-asm"
   ;;
 x86-64)
-  TARGET_CPU="x86_64"
+  # TARGET_CPU goes through to clang as -march=$TARGET_CPU. clang in
+  # NDK r25+ (with FFmpeg n7's configure) only accepts the hyphenated
+  # form 'x86-64'. TARGET_ARCH stays underscored — that's FFmpeg's
+  # internal arch name and configure expects it that way.
+  TARGET_CPU="x86-64"
   TARGET_ARCH="x86_64"
   ASM_OPTIONS=" --disable-neon --enable-asm --enable-inline-asm"
   ;;
@@ -431,6 +435,7 @@ fi
   --strip="${STRIP}" \
   --nm="${NM}" \
   --extra-libs="$(pkg-config --libs --static cpu-features)" \
+  --extra-ldflags="-Wl,-z,max-page-size=16384" \
   --disable-autodetect \
   --enable-cross-compile \
   --enable-pic \
@@ -447,7 +452,6 @@ fi
   ${DEBUG_OPTIONS} \
   --disable-neon-clobber-test \
   --disable-programs \
-  --disable-postproc \
   --disable-doc \
   --disable-htmlpages \
   --disable-manpages \
@@ -509,12 +513,28 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # MANUALLY ADD REQUIRED HEADERS
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/compat 1>>"${BASEDIR}"/build.log 2>&1
+mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/compat/android 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86 1>>"${BASEDIR}"/build.log 2>&1
 mkdir -p "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/config.h "${FFMPEG_LIBRARY_PATH}"/include/config.h 1>>"${BASEDIR}"/build.log 2>&1
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/va_copy.h "${FFMPEG_LIBRARY_PATH}"/include/compat/va_copy.h 1>>"${BASEDIR}"/build.log 2>&1
+# U21 (n8): stock fftools/ffmpeg.c added #include "compat/android/binder.h"
+# guarded by CONFIG_MEDIACODEC. Android NDK builds enable MediaCodec for
+# HW decode, so this include triggers. The header lives in FFmpeg's
+# compat/ tree and isn't installed by `make install`, so the wrapper
+# compile must see a copy at the include root. Apple/iOS doesn't hit this
+# (no MediaCodec there — uses VideoToolbox).
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/android/binder.h "${FFMPEG_LIBRARY_PATH}"/include/compat/android/binder.h 1>>"${BASEDIR}"/build.log 2>&1
+# FFmpeg n7's fftools unconditionally #include <stdbit.h> (C23 header).
+# NDK r25b clang (clang 14) doesn't ship it. FFmpeg's own configure
+# falls back to compat/stdbit/stdbit.h via -I; our wrapper compile
+# doesn't get that flag, so install the shim at the include root where
+# plain <stdbit.h> resolves to it.
+overwrite_file "${BASEDIR}"/src/ffmpeg/compat/stdbit/stdbit.h "${FFMPEG_LIBRARY_PATH}"/include/stdbit.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/x86/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/x86/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavcodec/arm/mathops.h "${FFMPEG_LIBRARY_PATH}"/include/libavcodec/arm/mathops.h 1>>"${BASEDIR}"/build.log 2>&1
@@ -533,7 +553,7 @@ overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/asm.h "${FFMPEG_LIBRARY_PAT
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/timer.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/arm/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/arm/timer.h 1>>"${BASEDIR}"/build.log 2>&1
 overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/aarch64/timer.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/aarch64/timer.h 1>>"${BASEDIR}"/build.log 2>&1
-overwrite_file "${BASEDIR}"/src/ffmpeg/libavutil/x86/emms.h "${FFMPEG_LIBRARY_PATH}"/include/libavutil/x86/emms.h 1>>"${BASEDIR}"/build.log 2>&1
+# libavutil/x86/emms.h was removed in FFmpeg 7 — drop from the copy list.
 
 if [ $? -eq 0 ]; then
   echo "ok"

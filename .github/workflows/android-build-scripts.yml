@@ -1,28 +1,12 @@
 name: android build scripts
 
 on:
-  push:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/android-build-scripts.yml'
-      - 'android/**'
-      - '!android/README.md'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'android.sh'
-  pull_request:
-    branches:
-      - development
-      - main
-    paths:
-      - '.github/workflows/android-build-scripts.yml'
-      - 'android/**'
-      - '!android/README.md'
-      - 'scripts/**'
-      - 'tools/**'
-      - 'android.sh'
+  # Homebase fork: this is the upstream multi-NDK validation matrix
+  # (r22b…r27d). The fork ships a single r27d AAR via build-android.yml
+  # (which now runs on PRs). Auto push/PR triggers removed here to keep
+  # `main` a meaningful signal — dispatch on demand to validate the
+  # full NDK range. See CUSTOMIZATION.md B3.
+  workflow_dispatch:
 
 jobs:
   build-main-on-linux:
@@ -35,9 +19,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: set up adopt jdk 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'adopt'
           java-version: '17'
@@ -66,9 +50,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: set up adopt jdk 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'adopt'
           java-version: '17'
@@ -97,9 +81,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: set up adopt jdk 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'adopt'
           java-version: '17'
@@ -126,9 +110,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: set up adopt jdk 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'adopt'
           java-version: '17'
@@ -155,9 +139,9 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: set up adopt jdk 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           distribution: 'adopt'
           java-version: '17'

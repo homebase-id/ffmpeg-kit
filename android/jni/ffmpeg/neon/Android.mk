@@ -63,3 +63,6 @@ LOCAL_MODULE := libswscale_neon
 LOCAL_MODULE_FILENAME := $(LOCAL_MODULE)
 LOCAL_SRC_FILES := libswscale_neon.so
 include $(PREBUILT_SHARED_LIBRARY)
+
+# U20 (n8): libpostproc removed from FFmpeg 8.x. The libpostproc_neon block
+# that was here (U9 follow-up) is gone — FFmpeg n8 doesn't emit it.

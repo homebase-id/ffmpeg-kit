@@ -16,7 +16,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
@@ -31,18 +31,18 @@ jobs:
       - name: print ffbuild logs
         if: ${{ failure() }}
         run: '[[ -f ./src/ffmpeg/ffbuild/config.log ]] && tail -50 ./src/ffmpeg/ffbuild/config.log'
-  build-ios-lts-on-macos-monterey:
-    name: ios lts on monterey
-    runs-on: macos-12
+  build-ios-lts-on-macos-ventura:
+    name: ios lts on ventura
+    runs-on: macos-13
     strategy:
       matrix:
-        xcode: [ '13.4.1' ]
+        xcode: [ '14.2' ]
         branches: [ 'main', 'development' ]
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
@@ -68,7 +68,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
@@ -83,18 +83,18 @@ jobs:
       - name: print ffbuild logs
         if: ${{ failure() }}
         run: '[[ -f ./src/ffmpeg/ffbuild/config.log ]] && tail -50 ./src/ffmpeg/ffbuild/config.log'
-  build-macos-lts-on-macos-monterey:
-    name: macos lts on monterey
-    runs-on: macos-12
+  build-macos-lts-on-macos-ventura:
+    name: macos lts on ventura
+    runs-on: macos-13
     strategy:
       matrix:
-        xcode: [ '13.4.1' ]
+        xcode: [ '14.2' ]
         branches: [ 'main', 'development' ]
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
@@ -120,7 +120,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
@@ -135,18 +135,18 @@ jobs:
       - name: print ffbuild logs
         if: ${{ failure() }}
         run: '[[ -f ./src/ffmpeg/ffbuild/config.log ]] && tail -50 ./src/ffmpeg/ffbuild/config.log'
-  build-tvos-lts-on-macos-monterey:
-    name: tvos lts on monterey
-    runs-on: macos-12
+  build-tvos-lts-on-macos-ventura:
+    name: tvos lts on ventura
+    runs-on: macos-13
     strategy:
       matrix:
-        xcode: [ '13.4.1' ]
+        xcode: [ '14.2' ]
         branches: [ 'main', 'development' ]
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ matrix.branches }}
       - name: prerequisites
