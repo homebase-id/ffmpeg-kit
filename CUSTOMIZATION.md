@@ -453,6 +453,15 @@ to see the exact diff to replay.
 - [x] `ffmpeg_var_cleanup()` function added in `fftools_ffmpeg.c`,
       called at the top of `ffmpeg_execute()` immediately after the C2
       setjmp.
+- [ ] **C11.1** — `print_report()`'s `first_report` / `last_time` statics
+      promoted to file scope (`pr_first_report` / `pr_last_time`) and
+      re-armed in `ffmpeg_var_cleanup()`. *(unchecked: pending macOS +
+      Android rebuild verification.)*
+
+> **Scope:** this fork is built and shipped **only for Apple & Android**.
+> The `linux/` port under `linux/src/` is not a shipped target and is not
+> kept in lockstep — C11.1 is applied to the Apple and Android
+> `fftools_ffmpeg.c` only.
 
 **Status: REQUIRED for chat-kmp.** Without this, the SECOND `ffmpeg_execute()`
 invocation in the same process SIGSEGVs inside `of_open()` at +1339,
@@ -506,12 +515,17 @@ Call `ffmpeg_var_cleanup()` right after the C2 setjmp block in
 `ffmpeg_execute()`, BEFORE C10's `program_name` assignment.
 
 The n6-era version reset ~10 more globals (`qp_histogram`,
-`decode_error_stat`, `nb_frames_dup`, `first_report`, `last_time`,
-`want_sdp`, `keyboard_last_time`, etc.) — n7/n8 moved all of those
-into the scheduler / `OutputFile` / `Statistics` structs, where they
-are owned by per-invocation allocations and freed on cleanup. Don't
-re-add resets for names that no longer exist; verify each n6 var
-still exists in n9.x before keeping it in C11.
+`decode_error_stat`, `nb_frames_dup`, `want_sdp`, `keyboard_last_time`,
+etc.) — n7/n8 moved most of those into the scheduler / `OutputFile` /
+`Statistics` structs, where they are owned by per-invocation
+allocations and freed on cleanup. Don't re-add resets for names that no
+longer exist; verify each n6 var still exists before keeping it in C11.
+
+> **Correction (C11.1).** An earlier revision of this note also listed
+> `first_report` and `last_time` as "moved into structs." That was
+> wrong: both are still **function-local statics** inside `print_report()`
+> in n8.1.1, and dropping their reset reintroduced an in-process-reuse
+> SIGSEGV — the missed sibling of the of_open crash above. See C11.1 below.
 
 **Reference.** `_upgrade_work/patches/ffmpeg.c.patch` around the
 `ffmpeg_var_cleanup` definition (line ~774).
@@ -526,6 +540,72 @@ native crash:
   -Pandroid.testInstrumentationRunnerArguments.class=id.homebase.api.video.CompressVideoAndroidInstrumentedTest
 # Expected: "Tests 5/5 completed. (0 skipped) (0 failed)"
 ```
+
+### C11.1 — Re-arm `print_report()`'s first-tick gate
+
+**Status: REQUIRED for chat-kmp.** A second SIGSEGV in the same
+in-process-reuse class as C11, but in `print_report()` rather than
+`of_open()`.
+
+`print_report()` has a guard whose job is to defer the first progress
+print until the output stream is dumped:
+
+```c
+if (((cur_time - last_time) < stats_period && !first_report) ||
+    (first_report && atomic_load(&nb_output_dumped) < nb_output_files))
+    return;
+```
+
+`first_report` and `last_time` are **function-local statics**. After the
+first transcode in the process `first_report` is set to `0` (end of
+`print_report`) and, being a local static, **C11's `ffmpeg_var_cleanup()`
+cannot reach it**. On every subsequent `ffmpeg_execute()` the
+`first_report && nb_output_dumped < nb_output_files` branch is dead, so
+`print_report` fires on its first tick — before any output packet is
+muxed — and walks `output_files[0]` / the `ost` list while they are still
+half-initialized → **SIGSEGV inside `print_report`**.
+
+**h264_videotoolbox correlation.** The HW encoder has first-output
+latency, widening the window where the transcode loop ticks
+`print_report` while `nb_output_dumped == 0`. libx264 emits output almost
+immediately and slips past the window. A `.mov` compress is also never
+the first `execute` in a send (probe/thumbnail/poster ran first), so
+`first_report` is already `0` by the time it runs — hence the observed
+"crashes after `getMediaInformation`" ordering correlation.
+
+**What to do.**
+1. Promote both statics to **file scope** just above `print_report()`,
+   renamed to avoid the unrelated function-local `last_time` static in
+   another function later in the file:
+   ```c
+   static int64_t pr_last_time    = -1;
+   static int     pr_first_report = 1;
+   ```
+2. Delete the two local declarations; use `pr_last_time` /
+   `pr_first_report` everywhere inside `print_report()` (the gate and the
+   `pr_first_report = 0` at function end).
+3. Reset both in `ffmpeg_var_cleanup()` (alongside the other resets):
+   ```c
+   pr_last_time    = -1;
+   pr_first_report = 1;
+   ```
+
+This restores stock single-shot semantics (`first_report` starts at `1`
+each run) under the repeated-execution model.
+
+**Applied to:** `apple/src/fftools_ffmpeg.c` and
+`android/ffmpeg-kit-android-lib/src/main/cpp/fftools_ffmpeg.c`. **Not**
+`linux/src/fftools_ffmpeg.c` (not a shipped target — see scope note above).
+
+**Validation.** Needs a macOS xcframework rebuild (with
+`h264_videotoolbox` enabled) + Android NDK build — cannot be verified on
+Windows. Run the chat-kmp send sequence that crashed
+(probe → thumbnail/poster → `.mov` compress via `h264_videotoolbox`) in
+one process; confirm no `print_report` SIGSEGV and that progress
+callbacks still fire on later runs. Re-run the C11
+`CompressVideoAndroidInstrumentedTest` 5/5 gate. If a crash still
+reproduces, capture a symbolicated `print_report+offset` frame to pin the
+exact deref.
 
 ## C8 — License + changelog header comment
 

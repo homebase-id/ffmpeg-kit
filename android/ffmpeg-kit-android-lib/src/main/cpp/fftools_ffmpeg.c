@@ -597,6 +597,14 @@ void update_benchmark(const char *fmt, ...)
     }
 }
 
+/* C11 follow-up (re: C5): print_report()'s first-tick gate must re-arm each
+ * ffmpeg_execute() so it defers progress output until outputs are dumped.
+ * As function-local statics these stuck at first_report=0 after run #1, firing
+ * print_report before output_files[0]/ost are initialized → SIGSEGV. Promoted
+ * to file scope so ffmpeg_var_cleanup() can reset them. See CUSTOMIZATION.md C11. */
+static int64_t pr_last_time    = -1;
+static int     pr_first_report = 1;
+
 static void print_report(int is_last_report, int64_t timer_start, int64_t cur_time, int64_t pts)
 {
     AVBPrint buf, buf_script;
@@ -604,8 +612,6 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     int vid;
     double bitrate;
     double speed;
-    static int64_t last_time = -1;
-    static int first_report = 1;
     uint64_t nb_frames_dup = 0, nb_frames_drop = 0;
     /* C5: capture per-tick stats for forward_report() at end of function.
      * Stay at sensible defaults if there's no video output stream. */
@@ -622,13 +628,13 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         return;
 
     if (!is_last_report) {
-        if (last_time == -1) {
-            last_time = cur_time;
+        if (pr_last_time == -1) {
+            pr_last_time = cur_time;
         }
-        if (((cur_time - last_time) < stats_period && !first_report) ||
-            (first_report && atomic_load(&nb_output_dumped) < nb_output_files))
+        if (((cur_time - pr_last_time) < stats_period && !pr_first_report) ||
+            (pr_first_report && atomic_load(&nb_output_dumped) < nb_output_files))
             return;
-        last_time = cur_time;
+        pr_last_time = cur_time;
     }
 
     t = (cur_time-timer_start) / 1000000.0;
@@ -770,7 +776,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         }
     }
 
-    first_report = 0;
+    pr_first_report = 0;
 }
 
 static void print_stream_maps(void)
@@ -1120,6 +1126,12 @@ static void ffmpeg_var_cleanup(int argc, char **argv)
 
     atomic_store(&nb_output_dumped, 0);
     progress_avio = NULL;
+
+    /* C11 follow-up: re-arm print_report()'s first-tick gate (see file-scope
+     * statics above print_report). Else it fires before outputs are dumped on
+     * the 2nd+ execute in-process → SIGSEGV. Restores stock one-shot semantics. */
+    pr_last_time    = -1;
+    pr_first_report = 1;
 
     input_files      = NULL;
     nb_input_files   = 0;
