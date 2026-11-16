@@ -267,32 +267,20 @@ future regressions if any caller decides to parallelize transcodes.
 
 ## C4 — `cancel_operation(long id)`
 
-- [x] **Stubbed.** No-op `void cancel_operation(long id)` added in
-      `fftools_ffmpeg.c` (all three trees). Symbol resolves; cancellation
-      does not interrupt an in-progress run. chat-kmp handles cancellation
-      at the coroutine layer instead.
-
-**Status: SYMBOL REQUIRED; FUNCTIONALITY OPTIONAL for chat-kmp.**
-
-**Minimum viable.** Add the following to `fftools_ffmpeg.c` near the top:
-
-```c
-void cancel_operation(long id) {
-    (void)id;
-    // Homebase chat-kmp does not use ffmpeg-kit's cancel API; cancellation
-    // is handled at the coroutine layer instead. Symbol exists to satisfy
-    // the wrapper link, but does not interrupt an in-progress invocation.
-}
-```
-
-**If we ever need real cancellation.** Set a thread-local atomic flag keyed
-by session id; in the scheduler main loop in `fftools_ffmpeg_sched.c`, poll
-this flag and short-circuit. The n7.1.3 scheduler is new ground — the n6.0
-implementation that lived in `ffmpeg.c::transcode_step` does not map
-directly. Treat this as new work, not a port.
-
-**Reference.** `_upgrade_work/patches/ffmpeg.c.patch` for the n6.0 logic;
-`fftools_ffmpeg_sched.c` for the new n7.1.3 surface.
+- [x] **Real per-session cancel** in the Android and Apple trees. chat-kmp
+      calls it: a coroutine cancel calls `session.cancel()` and waits for the
+      session to end, so a stub left ffmpeg running to the end of the file
+      after every cancel.
+  - `cancel_operation(id)` calls the wrapper's `cancelSession(id)`, which sets
+    the session's slot in `sessionMap` to 2. id 0 (cancel all) does nothing.
+  - `transcode()` checks `cancelRequested(globalSessionId)` with
+    `received_nb_signals` on every `sch_wait` tick (`stats_period`, 500 ms),
+    leaves the loop, `sch_stop`s the scheduler and returns 255, as on a signal.
+  - `addSession()` resets the slot when a session starts, so a cancel sent
+    before that is lost: callers repeat it until the session completes.
+- [ ] **Linux tree: still a no-op stub.** Its `cancelSession`,
+      `cancelRequested` and `globalSessionId` have C++ linkage in
+      `FFmpegKitConfig.cpp`; wire them through `extern "C"` if Linux is ever shipped.
 
 ## C5 — `set_report_callback(...)` + `forward_report()`
 
@@ -649,7 +637,7 @@ work for that pattern to succeed end-to-end.
 1. **C1 + C2** together — entry-point renames + setjmp/longjmp. This is the
    minimum to get a linkable library. After this, `nm` shows the symbols
    and the wrapper links.
-2. **C4 + C5 stubs** — no-op stubs for `cancel_operation` and
+2. **C4 + C5** — `cancel_operation` (real per-session cancel on Android and Apple) and
    `set_report_callback`. ~10 lines total. Library is now wrappable.
 3. **C6** — strip the stderr/signal hygiene issues. Safer for embedded use,
    no risk of regression for chat-kmp since it currently works around

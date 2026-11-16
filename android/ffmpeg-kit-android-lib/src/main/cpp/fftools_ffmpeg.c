@@ -92,7 +92,7 @@
  *   C1 — main() renamed ffmpeg_execute()
  *   C2 — body wrapped in setjmp(ex_buf__); failed runs longjmp here instead
  *        of calling exit()
- *   C4 — cancel_operation() no-op stub (chat-kmp does not use cancel API)
+ *   C4 — cancel_operation() sets the session's cancel flag; transcode() polls it
  *   C5 — set_report_callback() no-op stub (chat-kmp does not consume stats)
  *   C6 — setvbuf(stderr) and fflush(stderr) calls removed
  */
@@ -156,6 +156,11 @@ void term_exit(void)
     av_log(NULL, AV_LOG_QUIET, "%s", "");
     term_exit_sigsafe();
 }
+
+/* C4: per-session cancel flag, owned by the ffmpeg-kit wrapper. */
+extern __thread long globalSessionId;
+extern void cancelSession(long sessionId);
+extern int cancelRequested(long sessionId);
 
 static volatile int received_sigterm = 0;
 static volatile int received_nb_signals = 0;
@@ -266,9 +271,8 @@ void term_init(void)
      * user-installed cleanup logic.
      *
      * The `received_sigterm` flag stays in place and is driven by
-     * ffmpeg's internal abort paths and `cancel_operation()` (when a
-     * future caller wires it up), so cancellation still works at the
-     * application layer.
+     * ffmpeg's internal abort paths; `cancel_operation()` uses the
+     * session's cancel flag instead (C4).
      *
      * See CUSTOMIZATION.md C6. */
 #if HAVE_SETCONSOLECTRLHANDLER
@@ -954,7 +958,7 @@ static int transcode(Scheduler *sch)
     while (!sch_wait(sch, stats_period, &transcode_ts)) {
         int64_t cur_time= av_gettime_relative();
 
-        if (received_nb_signals)
+        if (received_nb_signals || cancelRequested(globalSessionId))
             break;
 
         /* if 'q' pressed, exits */
@@ -1026,26 +1030,13 @@ static int64_t getmaxrss(void)
 #endif
 }
 
-/* C4 — cancel_operation: no-op stub. chat-kmp doesn't call FFmpegKit.cancel();
- * cancellation is handled at the coroutine layer instead. Symbol exists so
- * the wrapper layer (ffmpegkit.c, FFmpegKit.m) links. To implement real
- * cancellation, set a session-id-keyed atomic flag here and poll it inside
- * fftools_ffmpeg_sched.c::sch_wait.
- *
- * First-call WARNING: a stub returning success is a silent footgun. If a
- * future caller wires real cancel they'd burn hours debugging why nothing
- * happens. Log once so the gap is loud. */
+/* C4 — cancel_operation: flags the session; transcode() polls the flag between sch_wait
+ * ticks (stats_period), stops the scheduler and returns 255, as on a signal. A cancel
+ * that arrives before the session starts is overwritten by addSession(), so callers
+ * repeat it until the session completes. id 0 (cancel all) is not supported. */
 void cancel_operation(long id) {
-    static atomic_int warned = 0;
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&warned, &expected, 1)) {
-        av_log(NULL, AV_LOG_WARNING,
-               "Homebase ffmpeg-kit: cancel_operation(%ld) called but "
-               "is a no-op stub (chat-kmp cancels at coroutine layer). "
-               "See CUSTOMIZATION.md C4. This warning fires once per "
-               "process load.\n", id);
-    }
-    (void)id;
+    if (id != 0)
+        cancelSession(id);
 }
 
 /* C5 — set_report_callback + forward_report: progress event dispatch
@@ -1265,7 +1256,7 @@ int ffmpeg_execute(int argc, char **argv)
                utime / 1000000.0, stime / 1000000.0, rtime / 1000000.0);
     }
 
-    ret = received_nb_signals                 ? 255 :
+    ret = (received_nb_signals || cancelRequested(globalSessionId)) ? 255 :
           (ret == FFMPEG_ERROR_RATE_EXCEEDED) ?  69 : ret;
 
 finish:
