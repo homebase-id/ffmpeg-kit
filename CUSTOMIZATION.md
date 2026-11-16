@@ -142,6 +142,14 @@ git checkout -b upgrade/ffmpeg-7.1.3-hotfix pre-8.x-baseline
 | `n8.1.1-customized` → `cc8d56e` | First commit producing green CI on both platforms for n8.1.1. **Pre-9.x revert anchor.** |
 | `upgrade/ffmpeg-8.x` | Active branch carrying all the above. Not yet merged to `main`. |
 
+**Point upgrade n8.1.1 → n8.1.3.** `scripts/source.sh` pins n8.1.3 (the
+arthenica mirror has the tag at upstream's SHA). The fftools delta between
+the two tags, 6 files and +93/−41 lines, was applied as a patch: run `replay.sh`
+against stock n8.1.1, commit, run it against stock n8.1.3, and `git apply -3`
+the difference onto the customized trees. It applied cleanly and touches
+no customization. The diff below against `stock-n8.1.1` therefore also shows
+that delta.
+
 To see *exactly* what makes our build different from stock FFmpeg, run:
 
 ```

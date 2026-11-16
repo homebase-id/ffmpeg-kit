@@ -68,7 +68,7 @@
 #include "fftools_cmdutils.h"
 #include "fftools_opt_common.h"
 
-/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.1.
+/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.3.
  * See CUSTOMIZATION.md at the repo root.
  *
  *   C1 — main() renamed ffprobe_execute()

@@ -11,12 +11,12 @@
 # Usage:
 #   FFMPEG_SRC=/path/to/extracted/ffmpeg-x.y.z scripts/upgrade/replay.sh
 #
-# If FFMPEG_SRC is unset, defaults to the n8.1.1 work tree this fork
+# If FFMPEG_SRC is unset, defaults to the n8.1.3 work tree this fork
 # was last upgraded against.
 
 set -euo pipefail
 
-FFMPEG_SRC="${FFMPEG_SRC:-/c/temp/Git/_upgrade_work/ffmpeg-n8.1.1/ffmpeg-8.1.1}"
+FFMPEG_SRC="${FFMPEG_SRC:-/c/temp/Git/_upgrade_work/ffmpeg-n8.1.3/ffmpeg-8.1.3}"
 SRC="$FFMPEG_SRC/fftools"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 

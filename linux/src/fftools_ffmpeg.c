@@ -86,7 +86,7 @@
 #include "fftools_ffmpeg_utils.h"
 #include "fftools_graphprint.h"
 
-/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.1.
+/* Homebase ffmpeg-kit customizations on top of stock FFmpeg n8.1.3.
  * See CUSTOMIZATION.md at the repo root for the full framework.
  *
  *   C1 — main() renamed ffmpeg_execute()
